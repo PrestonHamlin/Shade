@@ -13,12 +13,15 @@ map<string, MeshFileFormat> Mesh::FileExtensionMap = {
 
 
 Mesh::Mesh()
-: m_isValidMesh(false)
+    :
+    m_isValidMesh(false)
 {
 }
 
 Mesh::Mesh(string filename)
-: m_isValidMesh(false)
+    :
+    m_filename(filename),
+    m_isValidMesh(false)
 {
     LoadFromFile(filename);
 }
@@ -48,8 +51,11 @@ HRESULT Mesh::LoadFromFile(string filename)
     else
     {
         //const aiScene* pScene = m_importer.ReadFile(filepath.string(), 0);
-        const aiScene* pScene = m_importer.ReadFile(filepath.string(), aiProcess_MakeLeftHanded);
-        if (pScene == nullptr)
+        //const aiScene* pScene = m_importer.ReadFile(filepath.string(), aiProcess_MakeLeftHanded);
+        const uint flags = aiProcess_MakeLeftHanded | aiProcess_JoinIdenticalVertices;
+        //m_importer.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS, aiComponent_MATERIALS);
+        m_pScene = const_cast<aiScene*>(m_importer.ReadFile(filepath.string(), flags));
+        if (m_pScene == nullptr)
         {
             PrintMessage(Error, "assimp failed to load {}\n\t\t{}", filepath.filename().string(), m_importer.GetErrorString());
             result = E_FAIL;
@@ -61,11 +67,11 @@ HRESULT Mesh::LoadFromFile(string filename)
                          "\t{} meshes, {} materials, {} textures\n"
                          "\t{} cameras, {} lights, {} animations",
                          filepath.string(),
-                         pScene->mNumMeshes, pScene->mNumMaterials, pScene->mNumTextures,
-                         pScene->mNumCameras, pScene->mNumLights, pScene->mNumAnimations);
-            for (uint i=0; i<pScene->mNumMeshes; ++i)
+                         m_pScene->mNumMeshes, m_pScene->mNumMaterials, m_pScene->mNumTextures,
+                         m_pScene->mNumCameras, m_pScene->mNumLights, m_pScene->mNumAnimations);
+            for (uint i=0; i<m_pScene->mNumMeshes; ++i)
             {
-                aiMesh* pMesh = pScene->mMeshes[i];
+                aiMesh* pMesh = m_pScene->mMeshes[i];
                 PrintMessage(Info,
                              "\t\"{}\" - {} vertices, {} faces, {} bones\n"
                              "\t\t{} color channels, {} UV channels, material #{}",
@@ -73,9 +79,9 @@ HRESULT Mesh::LoadFromFile(string filename)
                              pMesh->GetNumColorChannels(), pMesh->GetNumUVChannels(), pMesh->mMaterialIndex
                              );
             }
-            for (uint i = 0; i < pScene->mNumMaterials; ++i)
+            for (uint i = 0; i < m_pScene->mNumMaterials; ++i)
             {
-                aiMaterial* pMaterial = pScene->mMaterials[i];
+                aiMaterial* pMaterial = m_pScene->mMaterials[i];
                 PrintMessage(Info,
                              "\t\"{}\" - {} properties\n",
                              pMaterial->GetName().C_Str(), pMaterial->mNumProperties
@@ -105,95 +111,17 @@ HRESULT Mesh::LoadFromFile(string filename)
 }
 
 
+const void* Mesh::GetVertexData()
+{
+    HRESULT result = S_OK;
+
+    return static_cast<void*>(m_pScene->mMeshes[0]->mVertices);
+}
+
+
 void Mesh::Unload()
 {
     m_importer.FreeScene();
 
     m_isValidMesh = false;
 }
-
-
-
-
-
-
-
-
-
-//HRESULT Mesh::LoadFromFile(string filename, MeshFileFormat format)
-//{
-//    HRESULT result = S_OK;
-//
-//    // verify file exists
-//    // TODO: offset relative paths from configured resource directory
-//    path filepath = path(filename);
-//
-//    if (!exists(filepath))
-//    {
-//        PrintMessage(Error, "Cannot locate file \"{}\"", filepath.string());
-//        result = E_INVALIDARG;
-//    }
-//    else
-//    {
-//        if (format == UnknownFormat)
-//        {
-//            format = DetermineMeshFileFormat(filepath);
-//        }
-//
-//        switch (format)
-//        {
-//        case OBJ:
-//            PrintMessage("Loading .obj file... ");
-//            result = LoadFromFileObj(filepath);
-//            PrintMessage("done!\n");
-//            break;
-//        case UnknownFormat:
-//        default:
-//            PrintMessage(Error, "Unhandled mesh file extension: {}", filepath.filename().string());
-//            result = E_INVALIDARG;
-//            break;
-//        }
-//
-//        // TODO: actually load file contents...
-//        // TODO: error propagation on bad file contents
-//    }
-//
-//    return result;
-//}
-
-
-//HRESULT Mesh::LoadFromFileObj(std::filesystem::path filepath)
-//{
-//    HRESULT result = S_OK;
-//    ifstream ifile(filepath);
-//
-//    if (!ifile)
-//    {
-//        char msg[80];
-//        strerror_s(msg, errno);
-//        //PrintMessage(Error, "Cannot open file {} - {%s}", filepath, strerror(errno));
-//        PrintMessage(Error, "Cannot open file {} - {}", filepath.string(), msg);
-//        result = E_FAIL;
-//    }
-//    else
-//    {
-//        string line;
-//
-//        getline(ifile, line);
-//    }
-//
-//    return result;
-//}
-
-
-//MeshFileFormat Mesh::DetermineMeshFileFormat(path filepath)
-//{
-//    string extension = filepath.extension().string();
-//
-//    // TODO: exceptions
-//    return FileExtensionMap[extension];
-//
-//    // TODO: Attempt to determine format from contents? Probably not.
-//}
-
-

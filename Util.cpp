@@ -35,17 +35,17 @@ std::string ToNormalString(const std::wstring& wstr)
 }
 
 // TODO: wrapper macro and/or LINE preprocessor definition?
-void CheckResult(HRESULT hr, const std::string& msg)
+void CheckResult(HRESULT hr, const std::string& msg, bool except)
 {
     if (FAILED(hr))
     {
-        //std::string outputMessage = "ERROR: " + std::system_category().message(hr) + "\n\t" + msg + "\n";
-        //OutputDebugStringA(outputMessage.c_str());
-
         std::string outputMessage = std::system_category().message(hr) + "\n\t" + msg + "\n";
         PrintMessage(Error, outputMessage);
 
-        throw std::exception();
+        if (except)
+        {
+            throw std::exception();
+        }
     }
 }
 
@@ -54,6 +54,12 @@ void CheckResult(HRESULT hr, const std::wstring& msg)
     CheckResult(hr, ToNormalString(msg));
 }
 
+
+// ID3D12Object::SetName is basically this, but with WKPDID_D3DDebugObjectNameW
+void SetDebugName(ID3D12Object* pObject, std::string name)
+{
+    pObject->SetPrivateData(WKPDID_D3DDebugObjectName, name.size(), name.c_str());
+}
 
 
 const std::string HumanReadableFileSize(uint fileSize)
@@ -79,3 +85,4 @@ const std::string HumanReadableFileSize(uint fileSize)
 
     return ss.str();
 }
+

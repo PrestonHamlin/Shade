@@ -16,6 +16,7 @@ PSInput VSMain(float4 position : POSITION, float4 color : COLOR)
 
     // model/view/projection matrix
     result.position = mul(MVP, position);
+    //result.position = position;
     result.color = color;
 
     return result;

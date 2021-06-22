@@ -14,19 +14,25 @@
 #include <chrono>
 #include <time.h>
 #include <limits>
+#include <filesystem>
 //#include <system_error>
 //#include <locale>
 //#include <codecvt>
 
+
+// TODO: abstract away resources and their management via engine classes and API
 #include <Windows.h>
-//#include <wrl/client.h>
+#include <d3d12.h>
+#include <dxgi1_6.h>
 #include <wrl.h>
 
 //#include <fmt/format.h>
 #include "imported/fmt/include/fmt/format.h"
 
-#include <filesystem>
 //#include <experimental/filesystem>
+
+
+using Microsoft::WRL::ComPtr;
 
 
 using uint		= uint32_t;
@@ -88,12 +94,12 @@ static void PrintMessage(MessageSeverity severity, const std::string& format, co
 
 
 
-void CheckResult(HRESULT hr, const std::string& msg = "");
+void CheckResult(HRESULT hr, const std::string& msg = "", bool except=false);
 void CheckResult(HRESULT hr, const std::wstring& msg);
 
 const std::string HumanReadableFileSize(uint fileSize);
 
-
+void SetDebugName(ID3D12Object* pObject, std::string name);
 
 inline HRESULT ReadDataFromFile(LPCWSTR filename, byte** data, UINT* size)
 {
@@ -134,4 +140,3 @@ inline HRESULT ReadDataFromFile(LPCWSTR filename, byte** data, UINT* size)
 
     return S_OK;
 }
-

@@ -39,6 +39,9 @@ public:
     //HRESULT LoadFromFileObj(std::filesystem::path filepath);
     void Unload();
 
+    const aiScene* GetScene() const {return m_pScene;}
+    const void* GetVertexData();
+
     //MeshFileFormat DetermineMeshFileFormat(std::experimental::filesystem::path filepath);
     //MeshFileFormat DetermineMeshFileFormat(std::filesystem::path filepath);
 
@@ -47,8 +50,9 @@ public:
 private:
     static std::map<std::string, MeshFileFormat> FileExtensionMap;
     Assimp::Importer m_importer;
+    aiScene* m_pScene;
+
 
     bool m_isValidMesh;
     std::string m_filename;
 };
-

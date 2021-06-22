@@ -10,7 +10,7 @@ public:
 	RenderEngine(UINT width, UINT height, std::wstring name);
 	virtual ~RenderEngine();
 
-	virtual void OnInit(const HWND window) = 0;
+	virtual void Init(const HWND window) = 0;
 	virtual void SetDebugData() = 0;
 
 	virtual void OnUpdate() = 0;
@@ -29,6 +29,8 @@ public:
 	const WCHAR* GetTitle() const   { return m_title.c_str(); }
 
 	void ParseCommandLineArgs(_In_reads_(argc) WCHAR* argv[], int argc);
+
+	//static RenderEngine* pCurrentEngine;
 
 protected:
 	void GetHardwareAdapter(_In_ IDXGIFactory2* pFactory, _Outptr_result_maybenull_ IDXGIAdapter1** ppAdapter);

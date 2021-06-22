@@ -2,6 +2,8 @@
 
 using namespace Microsoft::WRL;
 
+//RenderEngine* RenderEngine::pCurrentEngine = nullptr;
+
 RenderEngine::RenderEngine(UINT width, UINT height, std::wstring name) :
 	m_width(width),
 	m_height(height),

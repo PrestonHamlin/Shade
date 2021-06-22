@@ -1,18 +1,22 @@
 #include "Shade.h"
 #include "Dx12RenderEngine.h"
+#include "ShaderToyScene.h"
 
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+
+
 
 _Use_decl_annotations_
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
     //D3D12HelloConstBuffers sample(1280, 720, L"D3D12 Hello Constant Buffers");
     Dx12RenderEngine engine(800, 800, L"D3D12 Tinkering");
+    ShaderToyScene scene(800, 800, L"Scene Title");
     //Dx12RenderEngine engine(1000, 1000, L"D3D12 Tinkering");
     //return Win32Application::Run(&sample, hInstance, nCmdShow);
-
+    //RenderEngine::pCurrentEngine = &engine;
 
     // Parse the command line parameters
     int argc;
@@ -46,15 +50,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         nullptr,		// We have no parent window.
         nullptr,		// We aren't using menus.
         hInstance,
-        &engine);
+        //&engine);
+        &scene);
 
     // remove borders and title bar
     SetWindowLong(window, GWL_STYLE, 0); // remove all window styles
     //ShowWindow(window, SW_SHOW);         // refresh window to apply (lack of) style
     SetWindowPos(window, nullptr, 50, 50, 800, 800, 0);
 
-    // Initialize the sample. OnInit is defined in each child-implementation of DXSample.
-    engine.OnInit(window);
+    // initialize engine and scene
+    engine.Init(window);
+    scene.Init(window, &engine);
+
 
     ShowWindow(window, nCmdShow);
 
@@ -83,7 +90,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    RenderEngine* pEngine = reinterpret_cast<RenderEngine*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+    //RenderEngine* pEngine = reinterpret_cast<RenderEngine*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+    ShaderToyScene* pScene = reinterpret_cast<ShaderToyScene*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
 
     // let ImGui have first pick of events
     if (ImGui_ImplWin32_WndProcHandler(hWnd, message, wParam, lParam))
@@ -101,41 +109,77 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
         }
         return 0;
 
-    case WM_KEYDOWN:
-        if (pEngine)
-        {
-            pEngine->OnKeyDown(static_cast<UINT8>(wParam));
-        }
-        return 0;
+    //case WM_KEYDOWN:
+    //    if (pScene)
+    //    {
+    //        pScene->OnKeyDown(static_cast<UINT8>(wParam));
+    //    }
+    //    return 0;
 
-    case WM_KEYUP:
-        if (pEngine)
-        {
-            pEngine->OnKeyUp(static_cast<UINT8>(wParam));
-        }
-        return 0;
+    //case WM_KEYUP:
+    //    if (pScene)
+    //    {
+    //        pScene->OnKeyUp(static_cast<UINT8>(wParam));
+    //    }
+    //    return 0;
 
     case WM_PAINT:
-        if (pEngine)
+        if (pScene)
         {
-            pEngine->OnUpdate();
-            pEngine->OnRender();
+            pScene->OnUpdate();
+            pScene->OnRender();
         }
         return 0;
 
-    case WM_SIZING:
-        if (pEngine)
-        {
-            RECT* newDimensions = reinterpret_cast<RECT*>(lParam);
-            pEngine->OnResize(newDimensions);
-        }
-        return 0;
+    //case WM_SIZING:
+    //    if (pScene)
+    //    {
+    //        RECT* newDimensions = reinterpret_cast<RECT*>(lParam);
+    //        pScene->OnResize(newDimensions);
+    //    }
+    //    return 0;
+
+
+
+
+
+
+
+    //case WM_KEYDOWN:
+    //    if (pEngine)
+    //    {
+    //        pEngine->OnKeyDown(static_cast<UINT8>(wParam));
+    //    }
+    //    return 0;
+
+    //case WM_KEYUP:
+    //    if (pEngine)
+    //    {
+    //        pEngine->OnKeyUp(static_cast<UINT8>(wParam));
+    //    }
+    //    return 0;
+
+    //case WM_PAINT:
+    //    if (pEngine)
+    //    {
+    //        pEngine->OnUpdate();
+    //        pEngine->OnRender();
+    //    }
+    //    return 0;
+
+    //case WM_SIZING:
+    //    if (pEngine)
+    //    {
+    //        RECT* newDimensions = reinterpret_cast<RECT*>(lParam);
+    //        pEngine->OnResize(newDimensions);
+    //    }
+    //    return 0;
 
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
     }
 
-    // Handle any messages the switch statement didn't.
+    // use default handler for any unhandled messages
     return DefWindowProc(hWnd, message, wParam, lParam);
 }
