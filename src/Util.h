@@ -26,8 +26,8 @@
 #include <dxgi1_6.h>
 #include <wrl.h>
 
-//#include <fmt/format.h>
-#include "imported/fmt/include/fmt/format.h"
+#include <fmt/format.h>
+//#include "imported/fmt/include/fmt/format.h"
 
 //#include <experimental/filesystem>
 

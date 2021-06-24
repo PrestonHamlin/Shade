@@ -25,6 +25,7 @@ HRESULT Shader::Compile(std::string filename, const std::string entry, const std
     // load shader text
     m_filename = filename;
     std::ifstream ifile(m_filename);
+    if (!ifile.good()) PrintMessage(Error, "Shader {} could not be opened", filename);
     std::stringstream buffer;
     buffer << ifile.rdbuf();
     m_shaderText = buffer.str();

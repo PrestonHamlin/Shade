@@ -252,8 +252,8 @@ void Dx12RenderEngine::Init(const HWND window)
 
 
             Shader vertexShader, pixelShader;
-            vertexShader.Compile("shaders.hlsl", "VSMain", "vs_6_0");
-            pixelShader.Compile("shaders.hlsl", "PSMain", "ps_6_0");
+            vertexShader.Compile("src/shaders.hlsl", "VSMain", "vs_6_0");
+            pixelShader.Compile("src/shaders.hlsl", "PSMain", "ps_6_0");
 
             // vertex input layout
             D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
