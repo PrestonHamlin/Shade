@@ -324,11 +324,11 @@ void PipelineState::Render()
 
 
 
-
-void PipelineState::SetConstantBufferData(void* pData, uint dataSize)
+// immediately update constant buffer data and retain pointer to CPU memory
+void PipelineState::SetConstantBufferData(CbvData data)
 {
-    m_pConstantBufferData = pData;
-    m_constantBufferDataSize = dataSize;
+    m_pConstantBufferData    = data.pData;
+    m_constantBufferDataSize = data.size;
 
     memcpy(m_pConstandBufferDataDataBegin, m_pConstantBufferData, m_constantBufferDataSize);
 }

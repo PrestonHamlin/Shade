@@ -253,7 +253,8 @@ void ShaderToyScene::OnRender()
     ImGui::NewFrame();
 
     m_pEngine->NewFrame();
-    m_pipelineState.SetConstantBufferData(&m_constantBufferData, sizeof(m_constantBufferData));
+    CbvData frameConstants = {&m_constantBufferData, sizeof(m_constantBufferData)};
+    m_pipelineState.SetConstantBufferData(frameConstants);
     m_pipelineState.Render();
     m_pipelineState.Execute();
     m_pEngine->CopyResource(m_viewport.GetResource(), m_pipelineState.GetRenderTarget());

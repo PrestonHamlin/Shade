@@ -4,6 +4,12 @@
 #include "Shader.h"
 
 
+struct CbvData
+{
+    void* pData;
+    uint  size;
+};
+
 struct PipelineCreateInfo
 {
     uint RtvCount;
@@ -36,7 +42,7 @@ public:
     ComPtr<ID3D12DescriptorHeap> GetRtvHeap()       {return m_pRtvHeap;}
 
     void SetClearColor(float* pColor)               {m_pClearColor = pColor;}
-    void SetConstantBufferData(void* pData, uint dataSize);
+    void SetConstantBufferData(CbvData data);
 
     // state queries
     const bool isInitialized() const {m_initialized;}
