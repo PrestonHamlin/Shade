@@ -167,28 +167,25 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
 
     // copy the vertex data to GPU. TODO: this should use mesh data, and also be mutable
     {
-        // Define the geometry for a triangle.
-        struct Vertex
-        {
-            XMFLOAT3 position;
-            //XMFLOAT4 color;
-            XMFLOAT3 color;
+        XMFLOAT3 triangleVertices[8] = {
+            { -1.0f, -1.0f, -1.0f }, // 0
+            { -1.0f,  1.0f, -1.0f }, // 1
+            {  1.0f,  1.0f, -1.0f }, // 2
+            {  1.0f, -1.0f, -1.0f }, // 3
+            { -1.0f, -1.0f,  1.0f }, // 4
+            { -1.0f,  1.0f,  1.0f }, // 5
+            {  1.0f,  1.0f,  1.0f }, // 6
+            {  1.0f, -1.0f,  1.0f }  // 7
         };
-        //Vertex triangleVertices[] =
-        //{
-        //    { { 0.0f, 0.25f, 0.0f }, { 1.0f, 0.0f, 0.0f, } },
-        //    { { 0.25f, -0.25f, 0.0f }, { 0.0f, 1.0f, 0.0f, } },
-        //    { { -0.25f, -0.25f, 0.0f }, { 0.0f, 0.0f, 1.0f, } }
-        //};
-        Vertex triangleVertices[8] = {
-            { {-1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, 0.0f} }, // 0
-            { {-1.0f,  1.0f, -1.0f}, {0.0f, 1.0f, 0.0f} }, // 1
-            { { 1.0f,  1.0f, -1.0f}, {1.0f, 1.0f, 0.0f} }, // 2
-            { { 1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 0.0f} }, // 3
-            { {-1.0f, -1.0f,  1.0f}, {0.0f, 0.0f, 1.0f} }, // 4
-            { {-1.0f,  1.0f,  1.0f}, {0.0f, 1.0f, 1.0f} }, // 5
-            { { 1.0f,  1.0f,  1.0f}, {1.0f, 1.0f, 1.0f} }, // 6
-            { { 1.0f, -1.0f,  1.0f}, {1.0f, 0.0f, 1.0f} }  // 7
+        XMFLOAT3 triangleColors[] = {
+            {0.0f, 0.0f, 0.0f},
+            {0.0f, 1.0f, 0.0f},
+            {1.0f, 1.0f, 0.0f},
+            {1.0f, 0.0f, 0.0f},
+            {0.0f, 0.0f, 1.0f},
+            {0.0f, 1.0f, 1.0f},
+            {1.0f, 1.0f, 1.0f},
+            {1.0f, 0.0f, 1.0f}
         };
         short triangleIndices[] =
         {
@@ -201,18 +198,27 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
         };
 
         const UINT vertexBufferSize = sizeof(triangleVertices);
+        const UINT colorBufferSize = sizeof(triangleColors);
         const UINT indexBufferSize = sizeof(triangleIndices);
 
         memcpy(m_pUploadBufferBegin, triangleVertices, vertexBufferSize);
         m_vertexBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress();
-        m_vertexBufferView.StrideInBytes = sizeof(Vertex);
+        m_vertexBufferView.StrideInBytes = sizeof(XMFLOAT3);
         m_vertexBufferView.SizeInBytes = vertexBufferSize;
 
         m_pUploadBufferEnd = m_pUploadBufferBegin + vertexBufferSize;
         m_uploadBufferOffset = vertexBufferSize;
 
+        memcpy(m_pUploadBufferEnd, triangleColors, colorBufferSize);
+        m_colorBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress() + m_uploadBufferOffset;
+        m_colorBufferView.StrideInBytes = sizeof(XMFLOAT3);
+        m_colorBufferView.SizeInBytes = colorBufferSize;
+
+        m_pUploadBufferEnd += colorBufferSize;
+        m_uploadBufferOffset += colorBufferSize;
+
         memcpy(m_pUploadBufferEnd, triangleIndices, indexBufferSize);
-        m_indexBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress() + vertexBufferSize;
+        m_indexBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress() + m_uploadBufferOffset;
         m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
         m_indexBufferView.SizeInBytes = indexBufferSize;
     }
@@ -222,14 +228,12 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
     vertexShader.Compile("src/shaders.hlsl", "VSMain", "vs_6_0");
     pixelShader.Compile("src/shaders.hlsl", "PSMain", "ps_6_0");
 
-    // vertex input layout
+    // IA layout for vertex buffers
     static D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        //{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
-
 
 
     m_initialized = true;
@@ -299,26 +303,32 @@ void PipelineState::Render()
     CheckResult(m_pCommandAllocator->Reset());
     CheckResult(m_pCommandList->Reset(m_pCommandAllocator.Get(), m_pPipelineState.Get()));
 
+    // specify resource layouts and bindings
     m_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
     ID3D12DescriptorHeap* ppHeaps[] = { m_pSrvHeap.Get() };
     //m_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-
     m_pCommandList->SetGraphicsRootConstantBufferView(0, m_pConstantBuffer->GetGPUVirtualAddress());
+
+    // set rasterizer state
     m_pCommandList->RSSetViewports(1, &m_viewport);
     m_pCommandList->RSSetScissorRects(1, &m_scissorRect);
 
-    // specify render target(s)
+    // specify and prep render target(s)
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart());
     m_pCommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
-
-    // Record commands.
     if (m_pClearColor == nullptr) m_pCommandList->ClearRenderTargetView(rtvHandle, m_clearColor, 0, nullptr);
     else                          m_pCommandList->ClearRenderTargetView(rtvHandle, m_pClearColor, 0, nullptr);
+
+    // configure Input Assembler
     m_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     m_pCommandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+    m_pCommandList->IASetVertexBuffers(1, 1, &m_colorBufferView);
     m_pCommandList->IASetIndexBuffer(&m_indexBufferView);
+
+    // issue draw
     m_pCommandList->DrawIndexedInstanced(36, 1, 0, 0, 0);
 
+    // close command list in preparation for later execution
     CheckResult(m_pCommandList->Close());
 }
 

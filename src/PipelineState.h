@@ -85,6 +85,8 @@ private:
     ComPtr<ID3D12Resource>              m_pGeometryBuffer;      // committed resource for scene geometry data
     uint                                m_geometryBufferOffset; // offset to next free spot
     D3D12_VERTEX_BUFFER_VIEW            m_vertexBufferView;
+    D3D12_VERTEX_BUFFER_VIEW            m_colorBufferView;
+    D3D12_VERTEX_BUFFER_VIEW            m_normalBufferView;
     D3D12_INDEX_BUFFER_VIEW             m_indexBufferView;
 
     ComPtr<ID3D12Resource>              m_pConstantBuffer;
