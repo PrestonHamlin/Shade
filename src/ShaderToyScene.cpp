@@ -5,16 +5,16 @@
 ShaderToyScene::ShaderToyScene(UINT width, UINT height, std::wstring name) :
     m_width(width),
     m_height(height),
-    m_aspectRatio(float(width)/float(height))
-    //m_aspectRatio(float(width)/float(height)),
-    //m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
-    //m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height))
+    m_aspectRatio(float(width)/float(height)),
+    m_fieldOfViewAngle(45.0f),
+    m_showDebugConsole(false),
+    m_showImGuiDemoWindow(false),
+    m_showImGuiMetrics(false),
+    m_showImGuiStyleEditor(false)
 {
-
 }
 ShaderToyScene::~ShaderToyScene()
 {
-
 }
 
 void ShaderToyScene::Init(HWND window, Dx12RenderEngine* pEngine)
@@ -22,9 +22,6 @@ void ShaderToyScene::Init(HWND window, Dx12RenderEngine* pEngine)
     m_window = window;
     m_pEngine = pEngine;
     GetWindowRect(m_window, &m_windowPosition);
-
-    // TODO: move CBV into pipeline
-    m_pCbvDataBegin = pEngine->GetCbvDataBegin();
 
     PipelineCreateInfo pipelineCreateInfo = {};
     m_pipelineState.Init(pipelineCreateInfo);
@@ -125,13 +122,6 @@ void ShaderToyScene::BuildUI()
         ImGui::EndMainMenuBar();
     }
 
-    // ImGui simple box
-    {
-        ImGui::Begin("test");
-        ImGui::Text("this is a test");
-        ImGui::End();
-    }
-
     // clear-color picker
     {
         ImVec4 pickerColor(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
@@ -164,7 +154,6 @@ void ShaderToyScene::BuildUI()
         ImGui::Text("ImGui main viewport");
         ImGui::Text("Window: %.1f,%.1f, %.1fx%.1f", mainViewport->Pos.x, mainViewport->Pos.y, mainViewport->Size.x, mainViewport->Size.y);
         ImGui::Text("Client: %.1f,%.1f, %.1fx%.1f", mainViewport->WorkPos.x, mainViewport->WorkPos.y, mainViewport->WorkSize.x, mainViewport->WorkSize.y);
-        ImGui::Text("Window: %u,%u, %ux%u", m_left, m_top, m_width, m_height);
         ImGui::Text("Rect:   %i,%i,%i,%i %ix%i", m_windowPosition.left, m_windowPosition.top, m_windowPosition.right, m_windowPosition.bottom,
                                                  m_windowPosition.right - m_windowPosition.left, m_windowPosition.bottom - m_windowPosition.top);
         ImGui::Separator();
@@ -240,8 +229,6 @@ void ShaderToyScene::OnUpdate()
     XMMATRIX mvpMatrix = XMMatrixMultiply(m_ModelMatrix, m_ViewMatrix);
     mvpMatrix = XMMatrixMultiply(mvpMatrix, m_ProjectionMatrix);
     m_constantBufferData.MVP = mvpMatrix;
-
-    memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
 }
 
 void ShaderToyScene::OnRender()

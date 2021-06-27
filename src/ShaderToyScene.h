@@ -26,21 +26,17 @@ private:
         XMMATRIX MVP;
     };
 
-
-    Dx12RenderEngine* m_pEngine;
-    ComPtr<ID3D12CommandAllocator>      m_pCommandAllocator;
-    ComPtr<ID3D12GraphicsCommandList>   m_pCommandList;
-    UINT8*                              m_pCbvDataBegin;       // pointer to CBV data for mapping
+    Dx12RenderEngine*                   m_pEngine;
     PipelineState                       m_pipelineState;
 
     // scene data
-    float m_clearColor[4] = { 0.0f, 0.2f, 0.4f, 1.0f };
+    float                               m_clearColor[4] = {0.0f, 0.2f, 0.4f, 1.0f};
     SceneConstantBuffer                 m_constantBufferData;
     DirectX::XMMATRIX                   m_ModelMatrix;
     DirectX::XMMATRIX                   m_ViewMatrix;
     DirectX::XMMATRIX                   m_ProjectionMatrix;
-    float m_aspectRatio;
-    float m_fieldOfViewAngle = 45.0;
+    float                               m_aspectRatio;
+    float                               m_fieldOfViewAngle;
 
     // UI
     HWND                                m_window;
@@ -49,7 +45,6 @@ private:
     bool                                m_showImGuiDemoWindow;
     bool                                m_showImGuiMetrics;
     bool                                m_showImGuiStyleEditor;
-    uint                                m_left, m_top;
     uint                                m_width, m_height;
     RECT                                m_windowPosition;
     Viewport                            m_viewport;
