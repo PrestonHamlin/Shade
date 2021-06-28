@@ -19,6 +19,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 
 set(SHADE_SOURCES
+    src/Camera.cpp
     src/Dx12RenderEngine.cpp
     src/Mesh.cpp
     src/PipelineState.cpp
@@ -32,6 +33,7 @@ set(SHADE_SOURCES
     src/Widgets.cpp
 )
 set(SHADE_HEADERS
+    src/Camera.h
     src/Dx12RenderEngine.h
     src/Mesh.h
     src/PipelineState.h
