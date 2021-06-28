@@ -2,9 +2,21 @@
 
 # Ignore test models and media for now
 media/*
+*.zip
+*.7z
 
 # My default generation/build location and potential deployment locations
 build/*
+*.exe
+*.dll
+*.lib
+*.sln
+*.vcxproj*
+
+# Miscellaneous
+.vscode/
+Shade.args.json
+imgui.ini
 
 # CMake from https://github.com/github/gitignore/blob/master/CMake.gitignore
 CMakeLists.txt.user
