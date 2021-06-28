@@ -31,16 +31,13 @@ Mesh::~Mesh()
     m_importer.FreeScene();
 }
 
-
-
-
-
 HRESULT Mesh::LoadFromFile(string filename)
 {
     HRESULT result = S_OK;
 
     // verify file exists
     // TODO: offset relative paths from configured resource directory
+    // TODO: error propagation on bad file contents
     path filepath = path(filename);
 
     if (!exists(filepath))
@@ -50,10 +47,8 @@ HRESULT Mesh::LoadFromFile(string filename)
     }
     else
     {
-        //const aiScene* pScene = m_importer.ReadFile(filepath.string(), 0);
-        //const aiScene* pScene = m_importer.ReadFile(filepath.string(), aiProcess_MakeLeftHanded);
-        const uint flags = aiProcess_MakeLeftHanded | aiProcess_JoinIdenticalVertices;
-        //m_importer.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS, aiComponent_MATERIALS);
+        const uint flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate;
+        //m_importer.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS, aiComponent_MATERIALS); // strip materials
         m_pScene = const_cast<aiScene*>(m_importer.ReadFile(filepath.string(), flags));
         if (m_pScene == nullptr)
         {
@@ -96,32 +91,110 @@ HRESULT Mesh::LoadFromFile(string filename)
                 }
             }
 
-
-            //pScene->num
             m_isValidMesh = true;
             result = S_OK;
         }
-
-
-        // TODO: actually load file contents...
-        // TODO: error propagation on bad file contents
     }
 
     return result;
 }
-
-
-const void* Mesh::GetVertexData()
-{
-    HRESULT result = S_OK;
-
-    return static_cast<void*>(m_pScene->mMeshes[0]->mVertices);
-}
-
 
 void Mesh::Unload()
 {
     m_importer.FreeScene();
 
     m_isValidMesh = false;
+}
+
+MeshBufferLayout Mesh::PopulateGeometryBuffer(void* pBuffer)
+{
+    HRESULT result = S_OK;
+    MeshBufferLayout layout = {};
+    uint* writePointer = (uint*)pBuffer;
+    uint totalOffset = 0;
+
+    // copy vertex data
+    for (uint i = 0; i < m_pScene->mNumMeshes; ++i)
+    {
+        aiMesh* pMesh =  m_pScene->mMeshes[i];
+
+        // vertices
+        {
+            layout.vertexSize = pMesh->mNumVertices * sizeof(aiVector3D);
+            layout.vertexOffset = totalOffset;
+
+            memcpy(writePointer, pMesh->mVertices, layout.vertexSize);
+            writePointer += pMesh->mNumVertices * 3;
+            totalOffset += layout.vertexSize;
+        }
+
+        //per-vertex colors
+        if (pMesh->HasVertexColors(0))
+        {
+            layout.colorSize = pMesh->mNumVertices * sizeof(aiColor4D);
+            layout.colorOffset = totalOffset;
+
+            memcpy(writePointer, pMesh->mColors[i], layout.colorSize);
+            writePointer += pMesh->mNumVertices * 4;
+            totalOffset += layout.colorSize;
+        }
+        else
+        {
+            layout.colorSize = pMesh->mNumVertices * sizeof(aiColor4D);
+            layout.colorOffset = totalOffset;
+
+            for (uint j = 0; j < pMesh->mNumVertices; ++j)
+            {
+                float color[4] = { rand() / float(RAND_MAX), rand() / float(RAND_MAX), rand() / float(RAND_MAX), 1.0f };
+                memcpy(writePointer, color, sizeof(aiColor4D));
+                writePointer += 4;
+            }
+
+            totalOffset += layout.colorSize;
+        }
+
+        //if (pMesh->HasNormals())
+        //{
+        //    layout.normalSize = pMesh->mNumVertices * sizeof(aiVector3D);
+        //    layout.normalOffset = totalOffset;
+        //    //memcpy(writePointer, &test, sizeof(test));
+        //    memcpy(writePointer, pMesh->mNormals, layout.normalSize);
+        //    writePointer += pMesh->mNumVertices * 3;
+        //    totalOffset += layout.normalSize;
+        //}
+
+        // linearize index buffer to notate faces
+        if (pMesh->HasFaces())
+        {
+            layout.facesOffset = totalOffset;
+
+            for (uint j = 0; j < pMesh->mNumFaces; ++j)
+            {
+                memcpy(writePointer, pMesh->mFaces[j].mIndices, sizeof(uint)*3);
+                writePointer += 3;
+                layout.facesSize += sizeof(uint)*3;
+            }
+            totalOffset += layout.facesSize;
+        }
+    }
+
+    layout.totalSize = layout.vertexSize + layout.colorSize +
+                       layout.normalSize + layout.normalOffset;
+    PrintMessage("\n=== Offsets ==="
+                 "\nVertices:   {}"
+                 "\nColors:     {}"
+                 "\nNormals:    {}"
+                 "\nFaces:      {}"
+                 "\n",
+                 layout.vertexOffset, layout.colorOffset, layout.normalOffset, layout.facesOffset);
+    PrintMessage("\n=== Sizes ==="
+                 "\nVertices:   {}"
+                 "\nColors:     {}"
+                 "\nNormals:    {}"
+                 "\nFaces:      {}"
+                 "\nTOTAL:      {}"
+                 "\n",
+                 layout.vertexSize, layout.colorSize, layout.normalSize, layout.facesSize, layout.totalSize);
+
+    return layout;
 }

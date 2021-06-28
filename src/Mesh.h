@@ -18,40 +18,42 @@ enum MeshFileFormat
     OBJ,
 };
 
-
-struct ObjVertex
+struct MeshBufferLayout
 {
-    float x;
-    float y;
-    float z;
+    uint vertexOffset;
+    uint vertexSize;
+    uint colorOffset;
+    uint colorSize;
+    uint normalOffset;
+    uint normalSize;
+    uint facesOffset;
+    uint facesSize;
+    uint totalSize;
 };
+
 
 class Mesh
 {
 public:
-
     Mesh();
     Mesh(std::string filename);
     ~Mesh();
 
+    // main functionality
     HRESULT LoadFromFile(std::string filename);
-    //HRESULT LoadFromFile(std::string filename, MeshFileFormat format = UnknownFormat);
-    //HRESULT LoadFromFileObj(std::filesystem::path filepath);
     void Unload();
+    MeshBufferLayout PopulateGeometryBuffer(void* pBuffer);
 
+    // setters/getters/queries
     const aiScene* GetScene() const {return m_pScene;}
-    const void* GetVertexData();
-
-    //MeshFileFormat DetermineMeshFileFormat(std::experimental::filesystem::path filepath);
-    //MeshFileFormat DetermineMeshFileFormat(std::filesystem::path filepath);
-
+    const uint GetNumVertices(uint index=0) const {return m_pScene->mMeshes[index]->mNumVertices;}
+    const uint GetNumFaces(uint index=0) const {return m_pScene->mMeshes[index]->mNumFaces;}
     bool IsValidMesh() const { return m_isValidMesh; }
 
 private:
     static std::map<std::string, MeshFileFormat> FileExtensionMap;
     Assimp::Importer m_importer;
     aiScene* m_pScene;
-
 
     bool m_isValidMesh;
     std::string m_filename;
