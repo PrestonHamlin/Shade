@@ -23,9 +23,11 @@ void ShaderToyScene::Init(HWND window, Dx12RenderEngine* pEngine)
     m_pEngine = pEngine;
     GetWindowRect(m_window, &m_windowPosition);
 
+    m_mesh.LoadFromFile("./media/rotated_teapot.ply");
     PipelineCreateInfo pipelineCreateInfo = {};
     m_pipelineState.Init(pipelineCreateInfo);
     m_pipelineState.SetClearColor(m_clearColor);
+    m_pipelineState.AddMesh(&m_mesh);
 
     m_viewport.Init("primary pipeline RTV");
 }

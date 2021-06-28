@@ -31,6 +31,7 @@ public:
     // helpers
     void Init(PipelineCreateInfo createInfo);
     void SetShader(std::string file, ShaderKind type, std::string entry);
+    void AddMesh(Mesh* pMesh);
     void Render();
     //void Execute() {m_pEngine->ExecuteCommandList(m_pCommandList.Get());}
     void Execute() {Dx12RenderEngine::pCurrentEngine->ExecuteCommandList(m_pCommandList.Get());}
@@ -71,7 +72,7 @@ private:
     D3D12_GRAPHICS_PIPELINE_STATE_DESC  psoDesc;
     ComPtr<ID3D12PipelineState>         m_pPipelineState;
 
-    Mesh                                m_mesh;
+    std::vector<Mesh*>                  m_meshes;
 
     ComPtr<ID3D12Resource>              m_pRenderTarget;
     CD3DX12_VIEWPORT                    m_viewport;

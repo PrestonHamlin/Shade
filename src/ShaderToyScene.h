@@ -4,7 +4,6 @@
 #include "Viewport.h"
 #include "PipelineState.h"
 
-
 class ShaderToyScene : public Scene
 {
 
@@ -28,6 +27,7 @@ private:
 
     Dx12RenderEngine*                   m_pEngine;
     PipelineState                       m_pipelineState;
+    Mesh                                m_mesh;
 
     // scene data
     float                               m_clearColor[4] = {0.0f, 0.2f, 0.4f, 1.0f};

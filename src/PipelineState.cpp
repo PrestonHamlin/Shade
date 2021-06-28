@@ -6,7 +6,6 @@
 uint PipelineState::m_pipelineIdCounter = 0;
 
 
-
 PipelineState::PipelineState()
     :
     m_pipelineId(m_pipelineIdCounter++),
@@ -14,7 +13,6 @@ PipelineState::PipelineState()
     m_scissorRect(0, 0, 800, 800)
 {
 }
-
 
 PipelineState::PipelineState(PipelineCreateInfo createInfo)
     :
@@ -29,7 +27,6 @@ PipelineState::~PipelineState()
 {
 }
 
-//void PipelineState::Init(Dx12RenderEngine* pEngine)
 void PipelineState::Init(PipelineCreateInfo createInfo)
 {
     Dx12RenderEngine* pEngine = Dx12RenderEngine::pCurrentEngine;
@@ -64,10 +61,10 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
     }
 
 
-    // create this pipeline's heaps
+    // create this pipeline's heaps and committed resources
     {
-        //// descriptor heaps
-        //{
+        // descriptor heaps
+        {
             // RTV descriptor heap
             D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
             rtvHeapDesc.NumDescriptors = 1;
@@ -83,58 +80,53 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
             srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
             srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             CheckResult(pDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_pSrvHeap)));
-        //}
-    }
+        }
 
-    // constant buffer for per-frame data
-    {
-        CheckResult(pDevice->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(1024 * 64),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&m_pConstantBuffer)));
+        // constant buffer for per-frame data
+        {
+            CheckResult(pDevice->CreateCommittedResource(
+                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                D3D12_HEAP_FLAG_NONE,
+                &CD3DX12_RESOURCE_DESC::Buffer(1024 * 64),
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&m_pConstantBuffer)));
 
-        // Map and initialize the constant buffer. We don't unmap this until the
-        // app closes. Keeping things mapped for the lifetime of the resource is okay.
-        CD3DX12_RANGE readRange(0, 0);		// We do not intend to read from this resource on the CPU.
-        CheckResult(m_pConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pConstandBufferDataDataBegin)));
-        //memcpy(m_pConstandBufferDataDataBegin, m_pConstantBufferData, sizeof(m_constantBufferDataSize));
-    }
+            // Map and initialize the constant buffer. We don't unmap this until the
+            // app closes. Keeping things mapped for the lifetime of the resource is okay.
+            CD3DX12_RANGE readRange(0, 0);		// We do not intend to read from this resource on the CPU.
+            CheckResult(m_pConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pConstandBufferDataDataBegin)));
+            //memcpy(m_pConstandBufferDataDataBegin, m_pConstantBufferData, sizeof(m_constantBufferDataSize));
+        }
+        // upload heap (committed resource) for generic usage
+        {
+            constexpr uint uploadBufferSize = 32*1024*1024;
+            CheckResult(pDevice->CreateCommittedResource(
+                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                D3D12_HEAP_FLAG_NONE,
+                &CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize),
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&m_pUploadBuffer)));
 
+            // keep this buffer persistently mapped
+            CD3DX12_RANGE readRange(0, 0);
+            CheckResult(m_pUploadBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pUploadBufferBegin)));
+            m_pUploadBufferEnd = m_pUploadBufferBegin;
+            m_uploadBufferOffset = 0;
+        }
+        // default heap (committed resource) for geometry data
+        {
+            constexpr uint geometryBufferSize = 8*1024*1024;
+            CheckResult(pDevice->CreateCommittedResource(
+                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+                D3D12_HEAP_FLAG_NONE,
+                &CD3DX12_RESOURCE_DESC::Buffer(geometryBufferSize),
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&m_pGeometryBuffer)));
+        }
 
-    // upload heap (committed resource) for generic usage
-    {
-        constexpr uint uploadBufferSize = 8*1024*1024;
-        CheckResult(pDevice->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&m_pUploadBuffer)));
-
-        // keep this buffer persistently mapped
-        CD3DX12_RANGE readRange(0, 0);
-        CheckResult(m_pUploadBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pUploadBufferBegin)));
-        m_pUploadBufferEnd = m_pUploadBufferBegin;
-        m_uploadBufferOffset = 0;
-    }
-    // default heap (committed resource) for geometry data
-    {
-        constexpr uint geometryBufferSize = 8*1024*1024;
-        CheckResult(pDevice->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(geometryBufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&m_pGeometryBuffer)));
-    }
-
-    // resources
-    {
         // render target
         {
             D3D12_RESOURCE_DESC desc = {};
@@ -163,67 +155,6 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
         }
     }
 
-
-
-    // copy the vertex data to GPU. TODO: this should use mesh data, and also be mutable
-    {
-        XMFLOAT3 triangleVertices[8] = {
-            { -1.0f, -1.0f, -1.0f }, // 0
-            { -1.0f,  1.0f, -1.0f }, // 1
-            {  1.0f,  1.0f, -1.0f }, // 2
-            {  1.0f, -1.0f, -1.0f }, // 3
-            { -1.0f, -1.0f,  1.0f }, // 4
-            { -1.0f,  1.0f,  1.0f }, // 5
-            {  1.0f,  1.0f,  1.0f }, // 6
-            {  1.0f, -1.0f,  1.0f }  // 7
-        };
-        XMFLOAT3 triangleColors[] = {
-            {0.0f, 0.0f, 0.0f},
-            {0.0f, 1.0f, 0.0f},
-            {1.0f, 1.0f, 0.0f},
-            {1.0f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f},
-            {0.0f, 1.0f, 1.0f},
-            {1.0f, 1.0f, 1.0f},
-            {1.0f, 0.0f, 1.0f}
-        };
-        short triangleIndices[] =
-        {
-            0, 1, 2, 0, 2, 3,
-            4, 6, 5, 4, 7, 6,
-            4, 5, 1, 4, 1, 0,
-            3, 2, 6, 3, 6, 7,
-            1, 5, 6, 1, 6, 2,
-            4, 0, 3, 4, 3, 7
-        };
-
-        const UINT vertexBufferSize = sizeof(triangleVertices);
-        const UINT colorBufferSize = sizeof(triangleColors);
-        const UINT indexBufferSize = sizeof(triangleIndices);
-
-        memcpy(m_pUploadBufferBegin, triangleVertices, vertexBufferSize);
-        m_vertexBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress();
-        m_vertexBufferView.StrideInBytes = sizeof(XMFLOAT3);
-        m_vertexBufferView.SizeInBytes = vertexBufferSize;
-
-        m_pUploadBufferEnd = m_pUploadBufferBegin + vertexBufferSize;
-        m_uploadBufferOffset = vertexBufferSize;
-
-        memcpy(m_pUploadBufferEnd, triangleColors, colorBufferSize);
-        m_colorBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress() + m_uploadBufferOffset;
-        m_colorBufferView.StrideInBytes = sizeof(XMFLOAT3);
-        m_colorBufferView.SizeInBytes = colorBufferSize;
-
-        m_pUploadBufferEnd += colorBufferSize;
-        m_uploadBufferOffset += colorBufferSize;
-
-        memcpy(m_pUploadBufferEnd, triangleIndices, indexBufferSize);
-        m_indexBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress() + m_uploadBufferOffset;
-        m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
-        m_indexBufferView.SizeInBytes = indexBufferSize;
-    }
-
-
     static Shader vertexShader, pixelShader;
     vertexShader.Compile("src/shaders.hlsl", "VSMain", "vs_6_0");
     pixelShader.Compile("src/shaders.hlsl", "PSMain", "ps_6_0");
@@ -235,9 +166,7 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
         { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
-
     m_initialized = true;
-
 
     // describe and create the PSO
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -256,20 +185,8 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
     //psoDesc.RTVFormats[0]                   = DXGI_FORMAT_R32G32B32A32_FLOAT;
     psoDesc.SampleDesc.Count                = 1;
 
-    CheckResult(pEngine->CreatePipelineState(&psoDesc, &m_pPipelineState));
-
-
-
-
-    m_mesh.LoadFromFile("media/cube.obj");
-
-
-
-
-
+    CheckResult(pEngine->CreatePipelineState(&psoDesc, &m_pPipelineState), "compiling pipeline", true);
     m_compiled = true;
-
-
 
     // set debug names
     {
@@ -288,15 +205,48 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
     }
 }
 
-
-
 void PipelineState::SetShader(std::string file, ShaderKind type, std::string entry)
 {
 
 }
 
+// TODO: Maintain vector of meshes? Or just some layout metadata for draw instructions?
+void PipelineState::AddMesh(Mesh* pMesh)
+{
+    m_meshes.push_back(pMesh);
 
+    // TODO: programattically control residency of meshes
+    MeshBufferLayout layout = pMesh->PopulateGeometryBuffer(m_pUploadBufferBegin);
+    m_pUploadBufferEnd += layout.totalSize;
 
+    // this should be done per draw
+    m_vertexBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress();
+    m_vertexBufferView.StrideInBytes = sizeof(aiVector3D);
+    m_vertexBufferView.SizeInBytes = layout.vertexSize;
+
+    m_colorBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress() + layout.colorOffset;
+    m_colorBufferView.StrideInBytes = sizeof(aiColor4D);
+    m_colorBufferView.SizeInBytes = layout.colorSize;
+
+    m_normalBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress() + layout.normalOffset;
+    m_normalBufferView.StrideInBytes = sizeof(aiVector3D);
+    m_normalBufferView.SizeInBytes = layout.normalSize;
+
+    m_indexBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress() + layout.facesOffset;
+    m_indexBufferView.Format = DXGI_FORMAT_R32_UINT;
+    m_indexBufferView.SizeInBytes = layout.facesSize;
+
+    PrintMessage("\nVertex Buffer: {}B @ {}"
+                 "\nColor Buffer:  {}B @ {}"
+                 "\nNormal Buffer: {}B @ {}"
+                 "\nIndex Buffer:  {}B @ {}"
+                 "\n",
+                 m_vertexBufferView.SizeInBytes, m_vertexBufferView.BufferLocation,
+                 m_colorBufferView.SizeInBytes, m_colorBufferView.BufferLocation,
+                 m_normalBufferView.SizeInBytes, m_normalBufferView.BufferLocation,
+                 m_indexBufferView.SizeInBytes, m_indexBufferView.BufferLocation
+                 );
+}
 
 void PipelineState::Render()
 {
@@ -326,13 +276,11 @@ void PipelineState::Render()
     m_pCommandList->IASetIndexBuffer(&m_indexBufferView);
 
     // issue draw
-    m_pCommandList->DrawIndexedInstanced(36, 1, 0, 0, 0);
+    m_pCommandList->DrawIndexedInstanced(m_meshes[0]->GetNumFaces()*3, 1, 0, 0, 0);
 
     // close command list in preparation for later execution
     CheckResult(m_pCommandList->Close());
 }
-
-
 
 // immediately update constant buffer data and retain pointer to CPU memory
 void PipelineState::SetConstantBufferData(CbvData data)
