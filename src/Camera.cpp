@@ -9,10 +9,10 @@ Camera::Camera() :
     m_turnSpeed(0.1f),
     m_yaw(0.f),
     m_pitch(0.f),
-    m_FieldOfView(45.0f),
+    m_fieldOfView(45.0f),
     m_aspectRatio(1.0f),
-    m_minZ(0.0f),
-    m_maxZ(1.0f)
+    m_nearZ(0.01f),
+    m_farZ(1000.0f)
 {
 
 }
@@ -24,6 +24,10 @@ Camera::~Camera()
 
 void Camera::Update()
 {
+    // ensure valid values
+    if (m_nearZ <= 0) m_nearZ = 0.001;
+    if (m_farZ <= m_nearZ) m_farZ = m_nearZ + 0.01;
+
     // update look direction
     float r = cos(m_pitch);
     m_direction.x = r * sin(m_yaw);
@@ -79,10 +83,8 @@ void Camera::PitchDown(uint ticks)
 XMMATRIX Camera::GetViewMatrix()
 {
     return XMMatrixLookToLH(XMLoadFloat3(&m_position), XMLoadFloat3(&m_direction), XMLoadFloat3(&m_up));
-    //return XMMatrixLookToRH(XMLoadFloat3(&m_position), XMLoadFloat3(&m_direction), XMLoadFloat3(&m_up));
 }
 XMMATRIX Camera::GetProjectionMatrix()
 {
-    //return XMMatrixPerspectiveFovLH(45.0f, 1.0f, 0.1f, 100.0f);
-    return XMMatrixPerspectiveFovLH(m_FieldOfView, m_aspectRatio, m_minZ, m_maxZ);
+    return XMMatrixPerspectiveFovLH(XMConvertToRadians(m_fieldOfView), m_aspectRatio, m_nearZ, m_farZ);
 }

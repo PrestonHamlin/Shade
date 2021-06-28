@@ -28,10 +28,10 @@ public:
     void PitchUp(uint ticks=1);
     void PitchDown(uint ticks=1);
 
-    void IncreaseMinZ() {m_minZ += 0.01;}
-    void DecreaseMinZ() {m_minZ -= 0.01;}
-    void IncreaseMaxZ() {m_maxZ += 0.01;}
-    void DecreaseMaxZ() {m_maxZ -= 0.01;}
+    void IncreaseNearZ()                {m_nearZ += 0.01;}
+    void DecreaseNearZ()                {m_nearZ -= 0.01;}
+    void IncreaseFarZ()                 {m_farZ += 0.01;}
+    void DecreaseFarZ()                 {m_farZ -= 0.01;}
 
     XMMATRIX GetViewMatrix();
     XMMATRIX GetProjectionMatrix();
@@ -41,8 +41,8 @@ public:
     XMFLOAT3 GetPosition()              {return m_position;}
     XMFLOAT3 GetDirection()             {return m_direction;}
     XMFLOAT3 GetUpVector()              {return m_up;}
-    float GetMinZ()                     {return m_minZ;}
-    float GetMaxZ()                     {return m_maxZ;}
+    float GetNearZ()                    {return m_nearZ;}
+    float GetFarZ()                     {return m_farZ;}
 
 private:
     XMFLOAT3                            m_position;
@@ -52,8 +52,8 @@ private:
     float                               m_yaw;                  // angle about +Z axis
     float                               m_moveSpeed;
     float                               m_turnSpeed;
-    float                               m_FieldOfView;
+    float                               m_fieldOfView;
     float                               m_aspectRatio;
-    float                               m_minZ;
-    float                               m_maxZ;
+    float                               m_nearZ;
+    float                               m_farZ;
 };

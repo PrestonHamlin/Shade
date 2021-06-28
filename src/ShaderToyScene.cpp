@@ -5,8 +5,12 @@
 ShaderToyScene::ShaderToyScene(UINT width, UINT height, std::wstring name) :
     m_width(width),
     m_height(height),
+    m_modelMatrix(),
+    m_viewMatrix(),
+    m_projectionMatrix(),
     m_aspectRatio(float(width)/float(height)),
     m_fieldOfViewAngle(45.0f),
+    m_constantBufferData({}),
     m_showDebugConsole(false),
     m_showImGuiDemoWindow(false),
     m_showImGuiMetrics(false),
@@ -24,6 +28,8 @@ void ShaderToyScene::Init(HWND window, Dx12RenderEngine* pEngine)
     GetWindowRect(m_window, &m_windowPosition);
 
     m_mesh.LoadFromFile("./media/rotated_teapot.ply");
+    m_camera.SetPosition({0, 10, -45});
+    m_camera.SetDirection({0, -10, 45});
     PipelineCreateInfo pipelineCreateInfo = {};
     m_pipelineState.Init(pipelineCreateInfo);
     m_pipelineState.SetClearColor(m_clearColor);
@@ -124,6 +130,36 @@ void ShaderToyScene::BuildUI()
         ImGui::EndMainMenuBar();
     }
 
+    // camera controls
+    {
+        ImGui::Begin("Camera Controls");
+        XMFLOAT3 position  = m_camera.GetPosition();
+        XMFLOAT3 direction = m_camera.GetDirection();
+        XMFLOAT3 upVector  = m_camera.GetUpVector();
+        ImGui::Text("Position:  %f, %f, %f", position.x, position.y, position.z);
+        ImGui::Text("Direction: %f, %f, %f", direction.x, direction.y, direction.z);
+        ImGui::Text("Up Vector: %f, %f, %f", upVector.x, upVector.y, upVector.z);
+        ImGui::Text("Depth:     [%f, %f]", m_camera.GetNearZ(), m_camera.GetFarZ());
+        if (ImGui::Button("+X")) m_camera.Move({1,0,0});    ImGui::SameLine();
+        if (ImGui::Button("-X")) m_camera.Move({-1,0,0});   ImGui::SameLine();
+        if (ImGui::Button("+Y")) m_camera.Move({0,1,0});    ImGui::SameLine();
+        if (ImGui::Button("-Y")) m_camera.Move({0,-1,0});   ImGui::SameLine();
+        if (ImGui::Button("+Z")) m_camera.Move({0,0,1});    ImGui::SameLine();
+        if (ImGui::Button("-Z")) m_camera.Move({0,0,-1});
+
+        if (ImGui::Button("yaw left"))   m_camera.YawLeft();    ImGui::SameLine();
+        if (ImGui::Button("yaw right"))  m_camera.YawRight();   ImGui::SameLine();
+        if (ImGui::Button("pitch up"))   m_camera.PitchUp();    ImGui::SameLine();
+        if (ImGui::Button("pitch down")) m_camera.PitchDown();
+
+        if (ImGui::Button("MinZ++")) m_camera.IncreaseNearZ();  ImGui::SameLine();
+        if (ImGui::Button("MinZ--")) m_camera.DecreaseNearZ();  ImGui::SameLine();
+        if (ImGui::Button("MaxZ++")) m_camera.IncreaseFarZ();   ImGui::SameLine();
+        if (ImGui::Button("MaxZ--")) m_camera.DecreaseFarZ();
+
+        ImGui::End();
+    }
+
     // clear-color picker
     {
         ImVec4 pickerColor(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
@@ -204,32 +240,22 @@ void ShaderToyScene::BuildUI()
 
 void ShaderToyScene::OnUpdate()
 {
-    //m_pEngine->OnUpdate();
-
-    m_constantBufferData.angles.x += 0.005f;
-    m_constantBufferData.angles.y += 0.005f;
-    m_constantBufferData.angles.z += 0.005f;
-
-    static uint64_t frameCount = 0;
-    frameCount++;
+    m_camera.Update();
 
     // model
-    float angle = static_cast<float>(frameCount);
-    const XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
-    m_ModelMatrix = XMMatrixRotationAxis(rotationAxis, XMConvertToRadians(angle));
+    // TODO: model coordinates
 
     // view
-    const XMVECTOR eyePosition = XMVectorSet(0, 0, -10, 1);
-    const XMVECTOR focusPoint = XMVectorSet(0, 0, 0, 1);
-    const XMVECTOR upDirection = XMVectorSet(0, 1, 0, 0);
-    m_ViewMatrix = XMMatrixLookAtLH(eyePosition, focusPoint, upDirection);
+    m_viewMatrix = m_camera.GetViewMatrix();
 
     // projection
-    m_ProjectionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(m_fieldOfViewAngle), m_aspectRatio, 0.1f, 100.0f);
+    //m_projectionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(m_fieldOfViewAngle), m_aspectRatio, 0.1f, 1.0f);
+    m_projectionMatrix = m_camera.GetProjectionMatrix();
 
     // update MVP matrix
-    XMMATRIX mvpMatrix = XMMatrixMultiply(m_ModelMatrix, m_ViewMatrix);
-    mvpMatrix = XMMatrixMultiply(mvpMatrix, m_ProjectionMatrix);
+    //XMMATRIX mvpMatrix = XMMatrixMultiply(m_ModelMatrix, m_ViewMatrix);
+    XMMATRIX mvpMatrix = XMMatrixMultiply(XMMatrixIdentity(), m_viewMatrix);
+    mvpMatrix = XMMatrixMultiply(mvpMatrix, m_projectionMatrix);
     m_constantBufferData.MVP = mvpMatrix;
 }
 
@@ -243,6 +269,8 @@ void ShaderToyScene::OnRender()
 
     m_pEngine->NewFrame();
     CbvData frameConstants = {&m_constantBufferData, sizeof(m_constantBufferData)};
+    CD3DX12_VIEWPORT newViewport(0.f, 0.f, m_width, m_height, m_camera.GetNearZ(), m_camera.GetFarZ());
+    m_pipelineState.SetViewport(newViewport);
     m_pipelineState.SetConstantBufferData(frameConstants);
     m_pipelineState.Render();
     m_pipelineState.Execute();

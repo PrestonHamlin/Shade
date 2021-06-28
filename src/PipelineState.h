@@ -43,6 +43,7 @@ public:
     ComPtr<ID3D12DescriptorHeap> GetRtvHeap()       {return m_pRtvHeap;}
 
     void SetClearColor(float* pColor)               {m_pClearColor = pColor;}
+    void SetViewport(CD3DX12_VIEWPORT viewport)     {m_viewport = viewport;}
     void SetConstantBufferData(CbvData data);
 
     // state queries
