@@ -63,15 +63,15 @@ public:
 
 
 
-    ID3D12Device8* GetDevice() {return m_device.Get();}
-    uint GetRtvDescriptorSize() {m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);}
-    uint GetCbvSrvUavDescriptorSize() {m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);}
+    ID3D12Device8* GetDevice() {return m_pDevice.Get();}
+    uint GetRtvDescriptorSize() {m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);}
+    uint GetCbvSrvUavDescriptorSize() {m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);}
 
 
-    void CopyResource(ComPtr<ID3D12Resource> dst, ComPtr<ID3D12Resource> src);
-    void CopyResourceDescriptor(ComPtr<ID3D12DescriptorHeap> dst, ComPtr<ID3D12DescriptorHeap> src);
+    void CopyResource(ComPtr<ID3D12Resource> pDst, ComPtr<ID3D12Resource> pSrc);
+    void CopyResourceDescriptor(ComPtr<ID3D12DescriptorHeap> pDst, ComPtr<ID3D12DescriptorHeap> pSrc);
 
-    void* Dx12RenderEngine::SetSrv(ComPtr<ID3D12Resource> resource);
+    void* Dx12RenderEngine::SetSrv(ComPtr<ID3D12Resource> pResource);
 
     void DrawDebugUi();
 
@@ -90,25 +90,24 @@ private:
 
 
     // API constructs and interfaces
-    ComPtr<IDXGIFactory4>               m_factory;
-    ComPtr<IDXGIAdapter1>               m_adapter;
-    //ComPtr<ID3D12Device>                m_device;
-    ComPtr<ID3D12Device8>               m_device;
-    ComPtr<ID3D12CommandQueue>          m_commandQueue;
-    ComPtr<ID3D12CommandAllocator>      m_commandAllocator;
+    ComPtr<IDXGIFactory4>               m_pFactory;
+    ComPtr<IDXGIAdapter1>               m_pAdapter;
+    ComPtr<ID3D12Device8>               m_pDevice;
+    ComPtr<ID3D12CommandQueue>          m_pCommandQueue;
+    ComPtr<ID3D12CommandAllocator>      m_pCommandAllocator;
     ComPtr<ID3D12GraphicsCommandList>   m_pCommandList;
 
     // pipeline state
-    ComPtr<ID3D12PipelineState>         m_pipelineState;
-    ComPtr<ID3D12RootSignature>         m_rootSignature;
+    ComPtr<ID3D12PipelineState>         m_pPipelineState;
+    ComPtr<ID3D12RootSignature>         m_pRootSignature;
     CD3DX12_VIEWPORT                    m_viewport;
     CD3DX12_RECT                        m_scissorRect;
-    ComPtr<IDXGISwapChain3>             m_swapChain;
-    ComPtr<ID3D12Resource>              m_renderTargets[FrameCount];
+    ComPtr<IDXGISwapChain3>             m_pSwapChain;
+    ComPtr<ID3D12Resource>              m_pRenderTargets[FrameCount];
 
     // rendering resources
-    ComPtr<ID3D12DescriptorHeap>        m_rtvHeap;
-    ComPtr<ID3D12DescriptorHeap>        m_srvHeap;
+    ComPtr<ID3D12DescriptorHeap>        m_pRtvHeap;
+    ComPtr<ID3D12DescriptorHeap>        m_pSrvHeap;
     ComPtr<ID3D12Resource>              m_pUploadBuffer;        // generic CPU->GPU uploads
     uint                                m_uploadBufferOffset;   // offset to next free spot in upload buffer
     UINT8*                              m_pUploadBufferBegin;   // start of mapped region
@@ -117,18 +116,18 @@ private:
     uint                                m_geometryBufferOffset; // offset to next free spot
     //ComPtr<ID3D12Resource>              m_vertexBuffer;
     //D3D12_VERTEX_BUFFER_VIEW            m_vertexBufferView;
-    ComPtr<ID3D12Resource>              m_indexBuffer;
+    ComPtr<ID3D12Resource>              m_pIndexBuffer;
     D3D12_INDEX_BUFFER_VIEW             m_indexBufferView;
-    ComPtr<ID3D12Resource>              m_constantBuffer;
+    ComPtr<ID3D12Resource>              m_pConstantBuffer;
     //SceneConstantBuffer                 m_constantBufferData;
     UINT                                m_rtvDescriptorSize;   // offset into RTV descriptor heap for next RTV
     UINT8*                              m_pCbvDataBegin;       // pointer to CBV data for mapping
 
-    ComPtr<ID3D12Resource>              m_renderTargetTexture; // copy destination to use RTV as texture
+    ComPtr<ID3D12Resource>              m_pRenderTargetTexture; // copy destination to use RTV as texture
 
 
     // UI
-    ImGuiContext*                       m_ImGuiContext;
+    ImGuiContext*                       m_pImGuiContext;
     bool                                m_fullscreen;
     bool                                m_showDebugConsole;
     bool                                m_showImGuiDemoWindow;
@@ -138,8 +137,8 @@ private:
 
     // synchronization objects
     UINT                                m_frameIndex;
-    HANDLE                              m_fenceEvent;
-    ComPtr<ID3D12Fence>                 m_fence;
+    HANDLE                              m_pFenceEvent;
+    ComPtr<ID3D12Fence>                 m_pFence;
     UINT64                              m_fenceValue;
 
 
