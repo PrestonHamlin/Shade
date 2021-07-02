@@ -11,6 +11,8 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
+class ShaderToyScene;
+
 
 // The engine owns the device, adapter, swapchain and UI pipeline/heaps/resources. It schedules work and manages
 //  resources at the request of client Scenes. Ideally clients would know nothing about the engine internals, simply
@@ -19,7 +21,7 @@ using Microsoft::WRL::ComPtr;
 class Dx12RenderEngine : public RenderEngine
 {
 public:
-    Dx12RenderEngine(UINT width, UINT height, std::wstring name);
+    Dx12RenderEngine(UINT width, UINT height);
 
     // primary interfaces for render loop
     void Init(const HWND window);   // initialize API and other state
@@ -55,6 +57,7 @@ public:
     ID3D12Device8* GetDevice() {return m_pDevice.Get();}
     uint GetRtvDescriptorSize() {m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);}
     uint GetCbvSrvUavDescriptorSize() {m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);}
+    void SetScene(ShaderToyScene* pScene) {m_pScene = pScene;}
 
     // debug helpers
     void* Dx12RenderEngine::SetSrv(ComPtr<ID3D12Resource> pResource);
@@ -96,13 +99,21 @@ private:
     UINT                                m_rtvDescriptorSize;    // offset into RTV descriptor heap for next RTV
     float                               m_clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
-    // UI
-    ImGuiContext*                       m_pImGuiContext;
-    bool                                m_fullscreen;
-
     // synchronization objects
     UINT                                m_frameIndex;
     HANDLE                              m_pFenceEvent;
     ComPtr<ID3D12Fence>                 m_pFence;
     UINT64                              m_fenceValue;
+
+    // UI
+    ImGuiContext*                       m_pImGuiContext;
+    RECT                                m_windowPosition;
+    bool                                m_fullscreen;
+    bool                                m_showDebugConsole;     // top-level logs and console
+    bool                                m_showImGuiDemoWindow;  // demo is primary documentation for ImGui
+    bool                                m_showImGuiMetrics;     // useful for debugging draws and UI
+    bool                                m_showImGuiStyleEditor; // useful for configuring and debugging UI
+
+    // components
+    ShaderToyScene*                     m_pScene;
 };

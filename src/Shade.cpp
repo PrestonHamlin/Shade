@@ -10,8 +10,8 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 _Use_decl_annotations_
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
-    Dx12RenderEngine engine(800, 800, L"D3D12 Tinkering");
-    ShaderToyScene scene(800, 800, L"Scene Title");
+    Dx12RenderEngine engine(800, 800);
+    ShaderToyScene scene(L"Simple Scene");
 
     // initialize window class
     WNDCLASSEX windowClass = { 0 };
@@ -39,16 +39,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         nullptr,    // no parent window
         nullptr,    // no menus
         hInstance,
-        //&engine);
-        &scene);
+        &engine);
 
     // remove borders and title bar
     SetWindowLong(window, GWL_STYLE, 0);
     SetWindowPos(window, nullptr, 50, 50, 800, 800, 0);
 
     // initialize engine and scene
+    engine.SetScene(&scene);
     engine.Init(window);
-    scene.Init(window, &engine);
+    scene.Init(&engine);
     ShowWindow(window, nCmdShow);
 
     // process message until time to quit
@@ -70,8 +70,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    //RenderEngine* pEngine = reinterpret_cast<RenderEngine*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
-    ShaderToyScene* pScene = reinterpret_cast<ShaderToyScene*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+    RenderEngine* pEngine = reinterpret_cast<RenderEngine*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
 
     // let ImGui have first pick of events
     if (ImGui_ImplWin32_WndProcHandler(hWnd, message, wParam, lParam))
@@ -79,7 +78,6 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
         return true;
     }
 
-    // TODO: engine should be handling events
     switch (message)
     {
     case WM_CREATE:
@@ -90,10 +88,10 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
         return 0;
 
     case WM_PAINT:
-        if (pScene)
+        if (pEngine)
         {
-            pScene->OnUpdate();
-            pScene->OnRender();
+            pEngine->OnUpdate();
+            pEngine->OnRender();
         }
         return 0;
 
