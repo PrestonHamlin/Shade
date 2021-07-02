@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers.
+#define WIN32_LEAN_AND_MEAN
 #endif
 
 #define UNICODE 1                       // painful as it is, unicode support is useful...
