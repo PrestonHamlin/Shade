@@ -22,19 +22,19 @@ public:
     Dx12RenderEngine(UINT width, UINT height, std::wstring name);
 
     // primary interfaces for render loop
-    virtual void Init(const HWND window);   // initialize API and other state
-    virtual void OnUpdate();                // process inputs (physics, user, network, etc...)
-    virtual void PreRender();               // do some work at dawn of new frame
-    virtual void OnRender();                // issue Present()
-    virtual void PostRender();              // work and clenup after frame presented
+    void Init(const HWND window);   // initialize API and other state
+    void OnUpdate();                // process inputs (physics, user, network, etc...)
+    void PreRender();               // do some work at dawn of new frame
+    void OnRender();                // issue Present()
+    void PostRender();              // work and clenup after frame presented
     void Flush();
-    virtual void OnDestroy();
+    void OnDestroy();
 
     // other controls
     void BuildEngineUi();
-    virtual void OnResize(RECT* pRect);
+    void OnResize(RECT* pRect);
     void ToggleFullscreen();
-    virtual void OnKeyDown(UINT8 key);
+    void OnKeyDown(UINT8 key);
 
     // API access provided to clients
     HRESULT CreateCommandQueue(ID3D12CommandQueue**                     ppCommandQueue);
