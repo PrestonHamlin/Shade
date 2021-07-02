@@ -5,24 +5,27 @@
 #include "Shader.h"
 #include "Mesh.h"
 #include "ShaderToyScene.h"
-
 #include "Widgets.h"
 
-
-static ImFont* testFont;
 
 Dx12RenderEngine* Dx12RenderEngine::pCurrentEngine = nullptr;
 
 
+//**********************************************************************************************************************
+//                                              Engine Primary Interfaces
+//**********************************************************************************************************************
 Dx12RenderEngine::Dx12RenderEngine(UINT width, UINT height, std::wstring name) :
     RenderEngine(width, height, name),
+    m_uploadBufferOffset(0),
+    m_pUploadBufferBegin(nullptr),
+    m_pUploadBufferEnd(nullptr),
+    m_geometryBufferOffset(0),
+    m_rtvDescriptorSize(0),
+    m_pImGuiContext(nullptr),
+    m_fullscreen(false),
     m_frameIndex(0),
-    m_pCbvDataBegin(nullptr),
-    m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
-    m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
-    m_rtvDescriptorSize(0)
-    //m_rtvDescriptorSize(0),
-    //m_constantBufferData({})
+    m_pFenceEvent(nullptr),
+    m_fenceValue(0)
 {
     pCurrentEngine = this;
 }
@@ -30,9 +33,6 @@ Dx12RenderEngine::Dx12RenderEngine(UINT width, UINT height, std::wstring name) :
 void Dx12RenderEngine::Init(const HWND window)
 {
     m_window = window;
-
-    GetWindowRect(m_window, &m_windowPosition);
-
 
     // configure adapter and create device
     {
@@ -50,7 +50,6 @@ void Dx12RenderEngine::Init(const HWND window)
         }
 #endif
 
-
         // enable experimental shader models prior to device creation
         D3D12EnableExperimentalFeatures(1, &D3D12ExperimentalShaderModels, nullptr, 0);
 
@@ -62,7 +61,24 @@ void Dx12RenderEngine::Init(const HWND window)
         }
         else
         {
-            GetHardwareAdapter(m_pFactory.Get(), &m_pAdapter);
+            // try each adapter the runtime presents us with untii we fine one we like
+            for (UINT adapterIndex = 0; m_pFactory->EnumAdapters1(adapterIndex, &m_pAdapter) != DXGI_ERROR_NOT_FOUND; ++adapterIndex)
+            {
+                DXGI_ADAPTER_DESC1 desc;
+                m_pAdapter->GetDesc1(&desc);
+                PrintMessage("Examining device: {}\n", ToNormalString(desc.Description));
+
+                if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) // ignore software adapters
+                {
+                    continue;
+                }
+
+                // test the adapter without actually creating a device
+                if (SUCCEEDED(D3D12CreateDevice(m_pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr)))
+                {
+                    break;
+                }
+            }
         }
         CheckResult(D3D12CreateDevice(m_pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
     }
@@ -163,162 +179,6 @@ void Dx12RenderEngine::Init(const HWND window)
                 rtvHandle.Offset(1, m_rtvDescriptorSize);
             }
         }
-
-
-
-
-
-
-        // TODO: remove these since they are unused
-
-
-        // create constant buffer resource for inlined per-frame data
-        {
-            CheckResult(m_pDevice->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-                D3D12_HEAP_FLAG_NONE,
-                &CD3DX12_RESOURCE_DESC::Buffer(1024 * 64),
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr,
-                IID_PPV_ARGS(&m_pConstantBuffer)));
-
-            // Map and initialize the constant buffer. We don't unmap this until the
-            // app closes. Keeping things mapped for the lifetime of the resource is okay.
-            CD3DX12_RANGE readRange(0, 0);		// We do not intend to read from this resource on the CPU.
-            CheckResult(m_pConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pCbvDataBegin)));
-            //memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
-        }
-
-
-    }
-
-    // central pipeline for compositing UI
-    {
-        // create a root signature consisting of an inline CBV and an SRV table
-        {
-            D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-
-            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-            if (FAILED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-            {
-                featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-            }
-
-            CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
-            ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-            CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-            rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC, D3D12_SHADER_VISIBILITY_ALL);
-            //rootParameters[1].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
-            rootParameters[1].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
-
-            D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-                //D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-                //D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-                //D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-                //D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-                //D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-
-            CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-            rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
-
-            ComPtr<ID3DBlob> pSignature;
-            ComPtr<ID3DBlob> pError;
-            CheckResult(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &pSignature, &pError));
-            CheckResult(m_pDevice->CreateRootSignature(0, pSignature->GetBufferPointer(), pSignature->GetBufferSize(), IID_PPV_ARGS(&m_pRootSignature)));
-        }
-
-        // Create the pipeline state, which includes compiling and loading shaders.
-        {
-    //        ComPtr<ID3DBlob> vertexShader;
-            //ComPtr<ID3DBlob> pixelShader;
-    //
-    //#if defined(_DEBUG)
-    //        // Enable better shader debugging with the graphics debugging tools.
-    //        UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-    //#else
-    //        UINT compileFlags = 0;
-    //#endif
-    //        ComPtr<ID3DBlob> errorBlob;
-    //        //HRESULT vsresult = D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "VSMain", "vs_6_0", compileFlags, 0, &vertexShader, &errorBlob);
-    //        HRESULT vsresult = D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, &errorBlob);
-    //        if (errorBlob) OutputDebugStringA((LPCSTR)errorBlob->GetBufferPointer());
-    //        CheckResult(vsresult);
-    //        //HRESULT psresult = D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "PSMain", "ps_6_0", compileFlags, 0, &pixelShader, &errorBlob);
-    //        HRESULT psresult = D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, &errorBlob);
-    //        if (errorBlob) OutputDebugStringA((LPCSTR)errorBlob->GetBufferPointer());
-    //        CheckResult(psresult);
-
-
-
-            Shader vertexShader, pixelShader;
-            vertexShader.Compile("src/shaders.hlsl", "VSMain", "vs_6_0");
-            pixelShader.Compile("src/shaders.hlsl", "PSMain", "ps_6_0");
-
-            // vertex input layout
-            D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
-            {
-                { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-                //{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-                { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-            };
-
-            // describe and create the PSO
-            D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-            psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-            psoDesc.pRootSignature = m_pRootSignature.Get();
-            psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.GetBlob());
-            psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.GetBlob());
-            //psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
-            //psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
-            psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-            psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-            psoDesc.DepthStencilState.DepthEnable = FALSE;
-            psoDesc.DepthStencilState.StencilEnable = FALSE;
-            psoDesc.SampleMask = UINT_MAX;
-            psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-            psoDesc.NumRenderTargets = 1;
-            psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-            psoDesc.SampleDesc.Count = 1;
-
-            CheckResult(m_pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pPipelineState)));
-        }
-
-        // texture resource for RTV copy
-        {
-            D3D12_RESOURCE_DESC textureDesc = {};
-            textureDesc.MipLevels = 1;
-            textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-            textureDesc.Width = m_width;
-            textureDesc.Height = m_height;
-            textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-            textureDesc.DepthOrArraySize = 1;
-            textureDesc.SampleDesc.Count = 1;
-            textureDesc.SampleDesc.Quality = 0;
-            textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-
-            CheckResult(m_pDevice->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-                D3D12_HEAP_FLAG_NONE,
-                &textureDesc,
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                nullptr,
-                IID_PPV_ARGS(&m_pRenderTargetTexture)));
-
-
-            //// Describe and create a SRV for the texture.
-            //D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-            //srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            //srvDesc.Format = textureDesc.Format;
-            //srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-            //srvDesc.Texture2D.MipLevels = 1;
-
-            //UINT offset = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            //CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(m_srvHeap->GetCPUDescriptorHandleForHeapStart(), 0, offset);
-            //srvHandle.Offset(offset);
-            ////m_device->CreateShaderResourceView(m_renderTargetTexture.Get(), &srvDesc, m_srvHeap->GetCPUDescriptorHandleForHeapStart() + offset);
-            //m_device->CreateShaderResourceView(m_renderTargetTexture.Get(), &srvDesc, srvHandle);
-        }
     }
 
     // create fences and perform initial upload sync
@@ -326,17 +186,18 @@ void Dx12RenderEngine::Init(const HWND window)
         CheckResult(m_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pFence)));
         m_fenceValue = 1;
 
-        // Create an event handle to use for frame synchronization.
+        // create CPU-side event for waiting on
         m_pFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
         if (m_pFenceEvent == nullptr)
         {
-            CheckResult(HRESULT_FROM_WIN32(GetLastError()));
+            CheckResult(HRESULT_FROM_WIN32(GetLastError()), "fence creation failed");
         }
 
-        // Wait for the command list to execute; we are reusing the same command
-        // list in our main loop but for now, we just want to wait for setup to
-        // complete before continuing.
-        WaitForPreviousFrame();
+        // perrform initial flush so we are ready to begin afresh
+        Flush();
+
+        // start at frame in swapchain
+        m_frameIndex = m_pSwapChain->GetCurrentBackBufferIndex();
     }
 
     // label API constructs with debug names
@@ -386,53 +247,132 @@ void Dx12RenderEngine::Init(const HWND window)
     }
 }
 
-void Dx12RenderEngine::SetDebugData()
+void Dx12RenderEngine::OnUpdate()
 {
-    HRESULT result = S_OK;
+    // TODO: update internal state
+}
 
-    result = m_pDevice->SetName(m_useWarpDevice ? L"DX12 WARP Device" : L"DX12 Hardware Device");
+void Dx12RenderEngine::PreRender()
+{
+    CheckResult(m_pCommandAllocator->Reset());
+    CheckResult(m_pCommandList->Reset(m_pCommandAllocator.Get(), nullptr));
 
-    // command creation/submission constructs
-    //result = m_commandAllocator->SetName(L"Command Allocator");
-    //result = m_pCommandList->SetName(L"Command List");
-    //result = m_commandQueue->SetName(L"Command Queue");
-    //SetDebugName(m_commandAllocator.Get(), "Command Allocator");
-    //SetDebugName(m_pCommandList.Get(), "Command List");
-    //SetDebugName(m_commandQueue.Get(), "Command Queue");
+    // TODO: perform pre-render work for new frame
+}
+
+void Dx12RenderEngine::OnRender()
+{
+    // after UI is described, update the floating windows and re-draw their viewports
+    ImGui::UpdatePlatformWindows();
+    ImGui::RenderPlatformWindowsDefault(NULL, (void*)m_pCommandList.Get());
+
+    // collect ImGui commands and execute them, drawing the UI
+    PopulateCommandList();
+    ID3D12CommandList* ppCommandLists[] = { m_pCommandList.Get() };
+    m_pCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+
+    // present the frame we just generated and wait for all remaining work to complete
+    CheckResult(m_pSwapChain->Present(1, 0));   // sync to next vertical blank
+    //CheckResult(m_pSwapChain->Present(0, 0));   // present immediately (no vsync)
+    Flush();
+
+    // progress to next frame in swapchain
+    m_frameIndex = m_pSwapChain->GetCurrentBackBufferIndex();
+}
+
+void Dx12RenderEngine::PostRender()
+{
+    // TODO: perform post-render work for new frame
+}
+
+void Dx12RenderEngine::OnDestroy()
+{
+    // ensure GPU is idle and not using resources we want to free
+    Flush();
+
+    CloseHandle(m_pFenceEvent);
+
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext(m_pImGuiContext);
+    m_pImGuiContext = nullptr;
+}
+
+void Dx12RenderEngine::Flush()
+{
+    // For the time being, we only expect one frame from a single pipeline in flight. When parallel work across multiple
+    //  queues is wanted, we will need a proper synchronization mechanism and possibly a scheduler.
+
+    // signal on on current fence value
+    const UINT64 fence = m_fenceValue;
+    CheckResult(m_pCommandQueue->Signal(m_pFence.Get(), fence));
+    m_fenceValue++;
+
+    if (m_pFence->GetCompletedValue() < fence)
+    {
+        // set CPU-side event to wait on
+        CheckResult(m_pFence->SetEventOnCompletion(fence, m_pFenceEvent));
+        WaitForSingleObject(m_pFenceEvent, INFINITE);
+    }
+}
 
 
-    // resources
-    result = m_pRtvHeap->SetName(L"Engine RTV Heap");
-    result = m_pSrvHeap->SetName(L"Engine ImGui textures SRV Heap");
-    result = m_pConstantBuffer->SetName(L"Engine Constant Buffer");
-    result = m_pRenderTargetTexture->SetName(L"Engine RTV copy texture");
+//**********************************************************************************************************************
+//                                                  Other Controls
+//**********************************************************************************************************************
+void Dx12RenderEngine::BuildEngineUi()
+{
+    // engine/environment configuration details
+    {
+        // adapter info
+        DXGI_FRAME_STATISTICS frameStats;
+        m_pSwapChain->GetFrameStatistics(&frameStats);
+        DXGI_ADAPTER_DESC1 adapterDesc;
+        m_pAdapter->GetDesc1(&adapterDesc);
 
-    // pipeline state
-    result = m_pPipelineState->SetName(L"Engine Pipeline State Object");
-    result = m_pRootSignature->SetName(L"Engine Root Signature");
-    result = m_pRenderTargets[0]->SetName(L"Engine Render Target 0");
-    result = m_pRenderTargets[1]->SetName(L"Engine Render Target 1");
+        // winapi monitor info
+        MONITORINFOEXA monitorInfo = {};
+        monitorInfo.cbSize = sizeof(MONITORINFOEXA);
+        HMONITOR monitor = MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST); // get majority contributor
+        GetMonitorInfoA(monitor, &monitorInfo);
+        const uint width = monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left;
+        const uint height = monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top;
 
-    // synchronization/timing constructs
-    result = m_pFence->SetName(L"Engine Fence");
+        // system's name for device is something like "\\.\DISPLAY0" which we can use to get a user-friendly name
+        DISPLAY_DEVICEA displayDevice = {};
+        displayDevice.cb = sizeof(DISPLAY_DEVICEA);
+        EnumDisplayDevicesA(monitorInfo.szDevice, 0, &displayDevice, 0);
 
-    // TODO: use all wide or narrow strings?
-    // DXGI objects lack the SetName() wrapper around SetPrivateData()
-    constexpr char factoryDebugName[]     = "Engine DX12 Device Factory";
-    constexpr char adapterDebugName[]     = "Engine DX12 Hardware Adapter";
-    constexpr char adapterDebugNameWarp[] = "Engine DX12 WARP Adapter";
-    constexpr char swapchainDebugName[]   = "Engine Swapchain";
+        ImGui::Begin("Configuration Details");
+        ImGui::Text(ToNormalString(adapterDesc.Description).c_str());
+        ImGui::Text(monitorInfo.szDevice);
+        ImGui::Text(displayDevice.DeviceString);
+        ImGui::Text("Resolution: %ux%u", width, height);
+        ImGui::Separator();
+        ImGui::Text("Present #%u\n", frameStats.PresentRefreshCount);
+        ImGui::End();
+    }
 
-    m_pFactory->SetPrivateData(WKPDID_D3DDebugObjectName, sizeof(factoryDebugName), factoryDebugName);
-    if (m_useWarpDevice) m_pAdapter->SetPrivateData(WKPDID_D3DDebugObjectName, sizeof(adapterDebugNameWarp), adapterDebugNameWarp);
-    else                 m_pAdapter->SetPrivateData(WKPDID_D3DDebugObjectName, sizeof(adapterDebugName), adapterDebugName);
-    m_pSwapChain->SetPrivateData(WKPDID_D3DDebugObjectName, sizeof(swapchainDebugName), swapchainDebugName);
+    // display all SRV heap resources in use
+    {
+        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_pSrvHeap->GetGPUDescriptorHandleForHeapStart();
+        const uint offsetSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    PrintMessage(Info, "Debug names set");
+        ImGui::Begin("Engine Srv Heap Contents");
+        ImGui::Image((ImTextureID)gpuHandle.ptr, { 200.0f, 200 });
+        ImGui::Separator();
+        gpuHandle.ptr += offsetSize;
+        ImGui::Image((ImTextureID)gpuHandle.ptr, { 200.0f, 200 });
+        ImGui::Separator();
+        gpuHandle.ptr += offsetSize;
+        ImGui::Image((ImTextureID)gpuHandle.ptr, { 200.0f, 200 });
+        ImGui::End();
+    }
 }
 
 void Dx12RenderEngine::OnResize(RECT* pRect)
 {
+    // TODO: re-implement
     auto mainViewport = ImGui::GetMainViewport();
 
     // resize window, then place it where it is fully visible to prevent top bar from being stuck off-screen
@@ -446,249 +386,9 @@ void Dx12RenderEngine::OnResize(RECT* pRect)
     ResizeSwapchain(1280, 720);
 }
 
-// Load the rendering pipeline dependencies.
-void Dx12RenderEngine::LoadPipeline()
-{
-
-}
-
-// Load the sample assets.
-void Dx12RenderEngine::LoadAssets()
-{
-
-}
-
-// Update frame-based values.
-void Dx12RenderEngine::OnUpdate()
-{
-    //const float translationSpeed = 0.005f;
-    //const float offsetBounds = 1.25f;
-
-    // UI interactions may be requests for change in rendering, or otherwise change state
-    //ProcessUiEvents();
-
-    ////m_constantBufferData.angles.x += translationSpeed;
-    //m_constantBufferData.angles.x += 0.005f;
-    //m_constantBufferData.angles.y += 0.005f;
-    //m_constantBufferData.angles.z += 0.005f;
-
-    //static uint64_t frameCount = 0;
-    //frameCount++;
-
-    //// Update the model matrix.
-    //float angle = static_cast<float>(frameCount);
-    //const XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
-    //m_ModelMatrix = XMMatrixRotationAxis(rotationAxis, XMConvertToRadians(angle));
-
-    //// Update the view matrix.
-    //const XMVECTOR eyePosition = XMVectorSet(0, 0, -10, 1);
-    //const XMVECTOR focusPoint = XMVectorSet(0, 0, 0, 1);
-    //const XMVECTOR upDirection = XMVectorSet(0, 1, 0, 0);
-    //m_ViewMatrix = XMMatrixLookAtLH(eyePosition, focusPoint, upDirection);
-
-    //// Update the projection matrix.
-    //m_ProjectionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(m_fieldOfViewAngle), m_aspectRatio, 0.1f, 100.0f);
-
-    //// Update the MVP matrix
-    //XMMATRIX mvpMatrix = XMMatrixMultiply(m_ModelMatrix, m_ViewMatrix);
-    //mvpMatrix = XMMatrixMultiply(mvpMatrix, m_ProjectionMatrix);
-    //m_constantBufferData.MVP = mvpMatrix;
-
-    //memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
-}
-
-// Render the scene.
-void Dx12RenderEngine::OnRender()
-{
-    // Inform ImGui backends and core that we are starting a new frame, and construct the immediate-mode UI. The UI
-    //  will be drawn later via insertions into command list.
-    //ImGui_ImplDX12_NewFrame();
-    //ImGui_ImplWin32_NewFrame();
-    //ImGui::NewFrame();
-    //BuildUi();
-
-    // after UI is described, update the floating windows and re-draw their viewports
-    ImGui::UpdatePlatformWindows();
-    ImGui::RenderPlatformWindowsDefault(NULL, (void*)m_pCommandList.Get());
-
-
-
-
-    PopulateCommandList();
-
-    // Execute the command list.
-    ID3D12CommandList* ppCommandLists[] = { m_pCommandList.Get() };
-    m_pCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
-
-    // Present the frame.
-    CheckResult(m_pSwapChain->Present(1, 0));    // sync to next vertical blank
-    //CheckResult(m_swapChain->Present(0, 0));    // present immediately (no vsync)
-
-    WaitForPreviousFrame();
-}
-
-void Dx12RenderEngine::OnDestroy()
-{
-    // Ensure that the GPU is no longer referencing resources that are about to be
-    // cleaned up by the destructor.
-    WaitForPreviousFrame();
-
-    CloseHandle(m_pFenceEvent);
-
-    ImGui_ImplDX12_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext(m_pImGuiContext);
-    m_pImGuiContext = nullptr;
-}
-
-// Use immediate-mode ImGui constructs and state data to construct UI. Some state will be updated via references.
-void Dx12RenderEngine::BuildUi()
-{
-    // TODO: engine-specific UI components?
-}
-
-
-void Dx12RenderEngine::NewFrame()
-{
-    CheckResult(m_pCommandAllocator->Reset());
-    CheckResult(m_pCommandList->Reset(m_pCommandAllocator.Get(), m_pPipelineState.Get()));
-}
-
-// Fill the command list with all the render commands and dependent state.
-void Dx12RenderEngine::PopulateCommandList()
-{
-    ID3D12DescriptorHeap* ppHeaps[] = { m_pSrvHeap.Get() };
-
-    // Command list allocators can only be reset when the associated
-    // command lists have finished execution on the GPU; apps should use
-    // fences to determine GPU execution progress.
-    // However, when ExecuteCommandList() is called on a particular command
-    // list, that command list can then be reset at any time and must be before
-    // re-recording.
-    //CheckResult(m_commandAllocator->Reset());
-    //CheckResult(m_pCommandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get()));
-
-    m_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
-    m_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-
-    //m_pCommandList->SetGraphicsRootConstantBufferView(0, m_constantBuffer->GetGPUVirtualAddress());
-    //m_pCommandList->RSSetViewports(1, &m_viewport);
-    //m_pCommandList->RSSetScissorRects(1, &m_scissorRect);
-
-    // use back buffer of swapchain as render target
-    m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pRenderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
-    m_pCommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
-    m_pCommandList->ClearRenderTargetView(rtvHandle, m_clearColor, 0, nullptr);
-
-    // insert ImGui draw commands into engine command list
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_pCommandList.Get());
-
-    // transition back buffer to present mode prior to present
-    m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pRenderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
-
-    CheckResult(m_pCommandList->Close());
-}
-
-void Dx12RenderEngine::WaitForPreviousFrame()
-{
-    // WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
-    // This is code implemented as such for simplicity. The D3D12HelloFrameBuffering
-    // sample illustrates how to use fences for efficient resource usage and to
-    // maximize GPU utilization.
-
-    // Signal and increment the fence value.
-    const UINT64 fence = m_fenceValue;
-    CheckResult(m_pCommandQueue->Signal(m_pFence.Get(), fence));
-    m_fenceValue++;
-
-    // Wait until the previous frame is finished.
-    if (m_pFence->GetCompletedValue() < fence)
-    {
-        CheckResult(m_pFence->SetEventOnCompletion(fence, m_pFenceEvent));
-        WaitForSingleObject(m_pFenceEvent, INFINITE);
-    }
-
-    m_frameIndex = m_pSwapChain->GetCurrentBackBufferIndex();
-}
-
-void Dx12RenderEngine::ResizeSwapchain(uint width, uint height)
-{
-    // update swapchain and RTV state
-    {
-        // wait for render targets to not be in use, then remove references to back buffers
-        WaitForPreviousFrame();
-        m_pRenderTargets[0].Reset();
-        m_pRenderTargets[1].Reset();
-
-        // resize the swapchain buffers
-        DXGI_MODE_DESC newMode = {0};
-        newMode.Width = width;
-        newMode.Height = height;
-        newMode.RefreshRate.Numerator = 60;
-        newMode.RefreshRate.Denominator = 1;
-        m_pSwapChain->ResizeTarget(&newMode);
-        m_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0); // resize to client area
-
-        // re-bind swapchain back buffers to render target resources, then update RTVs
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart());
-        CheckResult(m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&m_pRenderTargets[0])));
-        m_pDevice->CreateRenderTargetView(m_pRenderTargets[0].Get(), nullptr, rtvHandle);
-        rtvHandle.Offset(1, m_rtvDescriptorSize);
-        CheckResult(m_pSwapChain->GetBuffer(1, IID_PPV_ARGS(&m_pRenderTargets[1])));
-        m_pDevice->CreateRenderTargetView(m_pRenderTargets[1].Get(), nullptr, rtvHandle);
-
-        // re-configure render state
-        m_pRenderTargets[0]->SetName(L"Updated RTV 0");
-        m_pRenderTargets[1]->SetName(L"Updated RTV 1");
-        m_frameIndex = m_pSwapChain->GetCurrentBackBufferIndex();
-        m_viewport.Width = width;
-        m_viewport.Height = height;
-        m_scissorRect.right = width;
-        m_scissorRect.bottom = height;
-    }
-
-    // copy texture is dependent on RTV, so re-create it
-    {
-        m_pRenderTargetTexture.Reset();
-
-        D3D12_RESOURCE_DESC textureDesc = {};
-        textureDesc.MipLevels = 1;
-        textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        textureDesc.Width = width;
-        textureDesc.Height = height;
-        textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-        textureDesc.DepthOrArraySize = 1;
-        textureDesc.SampleDesc.Count = 1;
-        textureDesc.SampleDesc.Quality = 0;
-        textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-
-        CheckResult(m_pDevice->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-            D3D12_HEAP_FLAG_NONE,
-            &textureDesc,
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            nullptr,
-            IID_PPV_ARGS(&m_pRenderTargetTexture)));
-
-        // Describe and create a SRV for the texture.
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srvDesc.Format = textureDesc.Format;
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srvDesc.Texture2D.MipLevels = 1;
-
-        UINT offset = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(m_pSrvHeap->GetCPUDescriptorHandleForHeapStart(), 0, offset);
-        srvHandle.Offset(offset);
-        m_pDevice->CreateShaderResourceView(m_pRenderTargetTexture.Get(), &srvDesc, srvHandle);
-
-        m_pRenderTargetTexture->SetName(L"updated RTV copy texture");
-    }
-}
-
 void Dx12RenderEngine::ToggleFullscreen()
 {
+    // TODO: re-implement
     auto mainViewport = ImGui::GetMainViewport();
 
     m_width = 1920;
@@ -704,6 +404,7 @@ void Dx12RenderEngine::ToggleFullscreen()
 
 void Dx12RenderEngine::OnKeyDown(UINT8 key)
 {
+    // TODO: flesh out
     switch (key)
     {
     case VK_F11:
@@ -718,9 +419,9 @@ void Dx12RenderEngine::OnKeyDown(UINT8 key)
 }
 
 
-
-
-
+//**********************************************************************************************************************
+//                                              Mediated API Access
+//**********************************************************************************************************************
 HRESULT Dx12RenderEngine::CreateCommandQueue(ID3D12CommandQueue** ppCommandQueue)
 {
     HRESULT result = S_OK;
@@ -793,7 +494,6 @@ HRESULT Dx12RenderEngine::CreateRootSignature(CD3DX12_VERSIONED_ROOT_SIGNATURE_D
     return result;
 }
 
-
 HRESULT Dx12RenderEngine::CreatePipelineState(D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc,
                                               ID3D12PipelineState**               ppPipelineState)
 {
@@ -803,15 +503,22 @@ HRESULT Dx12RenderEngine::CreatePipelineState(D3D12_GRAPHICS_PIPELINE_STATE_DESC
     return result;
 }
 
-
 HRESULT Dx12RenderEngine::CreateResource(ID3D12Resource** ppResource)
 {
 
     return 0;
 }
 
+void Dx12RenderEngine::ExecuteCommandList(ID3D12GraphicsCommandList* pCommandList)
+{
+    ID3D12CommandList* ppCommandLists[] = { pCommandList };
+    m_pCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+}
 
 
+//**********************************************************************************************************************
+//                                              Utility & Ease-Of-Use
+//**********************************************************************************************************************
 const uint Dx12RenderEngine::UploadGeometryData(Mesh* pMesh)
 {
     const aiScene* pScene = pMesh->GetScene();
@@ -829,8 +536,6 @@ const uint Dx12RenderEngine::UploadGeometryData(Mesh* pMesh)
     return 0;
 }
 
-
-
 void Dx12RenderEngine::CopyResource(ComPtr<ID3D12Resource> pDst, ComPtr<ID3D12Resource> pSrc)
 {
 
@@ -844,9 +549,12 @@ void Dx12RenderEngine::CopyResource(ComPtr<ID3D12Resource> pDst, ComPtr<ID3D12Re
 }
 
 
-
+//**********************************************************************************************************************
+//                                                      Debug
+//**********************************************************************************************************************
 void* Dx12RenderEngine::SetSrv(ComPtr<ID3D12Resource> pResource)
 {
+    // TODO: rework
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     //srvDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -866,61 +574,89 @@ void* Dx12RenderEngine::SetSrv(ComPtr<ID3D12Resource> pResource)
 }
 
 
-
-void Dx12RenderEngine::DrawDebugUi()
+//**********************************************************************************************************************
+//                                              Engine Internal Helpers
+//**********************************************************************************************************************
+void Dx12RenderEngine::PopulateCommandList()
 {
-    // engine/environment configuration details
+    // ImGui uses the heaps we provide, so we need to set them
+    ID3D12DescriptorHeap* ppHeaps[] = { m_pSrvHeap.Get() };
+    m_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+    // use back buffer of swapchain as render target
+    m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pRenderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
+    m_pCommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+    m_pCommandList->ClearRenderTargetView(rtvHandle, m_clearColor, 0, nullptr);
+
+    // insert ImGui draw commands into engine command list
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_pCommandList.Get());
+
+    // transition back buffer to present mode prior to present
+    m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pRenderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
+
+    CheckResult(m_pCommandList->Close());
+}
+
+void Dx12RenderEngine::ResizeSwapchain(uint width, uint height)
+{
+    // TODO: re-implement
+    // update swapchain and RTV state
     {
-        // adapter info
-        DXGI_FRAME_STATISTICS frameStats;
-        m_pSwapChain->GetFrameStatistics(&frameStats);
-        DXGI_ADAPTER_DESC1 adapterDesc;
-        m_pAdapter->GetDesc1(&adapterDesc);
+        // wait for render targets to not be in use, then remove references to back buffers
+        Flush();
+        m_pRenderTargets[0].Reset();
+        m_pRenderTargets[1].Reset();
 
-        // winapi monitor info
-        MONITORINFOEXA monitorInfo = {};
-        monitorInfo.cbSize = sizeof(MONITORINFOEXA);
-        HMONITOR monitor = MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST); // get majority contributor
-        GetMonitorInfoA(monitor, &monitorInfo);
-        const uint width = monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left;
-        const uint height = monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top;
+        // resize the swapchain buffers
+        DXGI_MODE_DESC newMode = {0};
+        newMode.Width = width;
+        newMode.Height = height;
+        newMode.RefreshRate.Numerator = 60;
+        newMode.RefreshRate.Denominator = 1;
+        m_pSwapChain->ResizeTarget(&newMode);
+        m_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0); // resize to client area
 
-        // system's name for device is something like "\\.\DISPLAY0" which we can use to get a user-friendly name
-        DISPLAY_DEVICEA displayDevice = {};
-        displayDevice.cb = sizeof(DISPLAY_DEVICEA);
-        EnumDisplayDevicesA(monitorInfo.szDevice, 0, &displayDevice, 0);
+        // re-bind swapchain back buffers to render target resources, then update RTVs
+        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart());
+        CheckResult(m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&m_pRenderTargets[0])));
+        m_pDevice->CreateRenderTargetView(m_pRenderTargets[0].Get(), nullptr, rtvHandle);
+        rtvHandle.Offset(1, m_rtvDescriptorSize);
+        CheckResult(m_pSwapChain->GetBuffer(1, IID_PPV_ARGS(&m_pRenderTargets[1])));
+        m_pDevice->CreateRenderTargetView(m_pRenderTargets[1].Get(), nullptr, rtvHandle);
 
-        ImGui::Begin("Configuration Details");
-        ImGui::Text(ToNormalString(adapterDesc.Description).c_str());
-        ImGui::Text(monitorInfo.szDevice);
-        ImGui::Text(displayDevice.DeviceString);
-        ImGui::Text("Resolution: %ux%u", width, height);
-        ImGui::Separator();
-        ImGui::Text("Present #%u\n", frameStats.PresentRefreshCount);
-        ImGui::End();
-    }
-
-    // display all SRV heap resources in use
-    {
-        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_pSrvHeap->GetGPUDescriptorHandleForHeapStart();
-        const uint offsetSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-        ImGui::Begin("Engine Srv Heap Contents");
-        ImGui::Image((ImTextureID)gpuHandle.ptr, { 200.0f, 200 });
-        ImGui::Separator();
-        gpuHandle.ptr += offsetSize;
-        ImGui::Image((ImTextureID)gpuHandle.ptr, { 200.0f, 200 });
-        ImGui::Separator();
-        gpuHandle.ptr += offsetSize;
-        ImGui::Image((ImTextureID)gpuHandle.ptr, { 200.0f, 200 });
-        ImGui::End();
+        // re-configure render state
+        m_pRenderTargets[0]->SetName(L"Updated RTV 0");
+        m_pRenderTargets[1]->SetName(L"Updated RTV 1");
+        m_frameIndex = m_pSwapChain->GetCurrentBackBufferIndex();
     }
 }
 
-
-
-void Dx12RenderEngine::ExecuteCommandList(ID3D12GraphicsCommandList* pCommandList)
+void Dx12RenderEngine::SetDebugData()
 {
-    ID3D12CommandList* ppCommandLists[] = { pCommandList };
-    m_pCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+    HRESULT result = S_OK;
+
+    // DXGI
+    SetDebugName(m_pFactory.Get(), "DXGI Factory");
+    SetDebugName(m_pAdapter.Get(), "DXGI Adapter");
+    SetDebugName(m_pSwapChain.Get(), "DXGI Swapchain");
+
+    // D3D12
+    result = m_pDevice->SetName(m_useWarpDevice ? L"DX12 WARP Device" : L"DX12 Hardware Device");
+    result = m_pCommandQueue->SetName(L"Engine Command Queue");
+    result = m_pCommandAllocator->SetName(L"Engine Command Allocator");
+    result = m_pCommandList->SetName(L"Engine Command List");
+
+    // resources for building and compositing UI
+    result = m_pRtvHeap->SetName(L"Engine RTV Heap");
+    result = m_pSrvHeap->SetName(L"Engine ImGui textures SRV Heap");
+    result = m_pRenderTargets[0]->SetName(L"Engine Render Target 0");
+    result = m_pRenderTargets[1]->SetName(L"Engine Render Target 1");
+    result = m_pUploadBuffer->SetName(L"Engine Generic Upload Buffer");
+    result = m_pGeometryBuffer->SetName(L"Engine Geometry Buffer");
+
+    // synchronization/timing constructs
+    result = m_pFence->SetName(L"Engine Fence");
+
+    PrintMessage(Info, "Debug names set");
 }

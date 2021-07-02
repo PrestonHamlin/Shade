@@ -231,8 +231,8 @@ void ShaderToyScene::BuildUI()
 
     m_viewport.DrawUI();
 
-    // draw engine-level debug elements such as heap contents
-    m_pEngine->DrawDebugUi();
+    // display engine-level debug elements such as heap contents
+    m_pEngine->BuildEngineUi();
 
     //ImGui::EndFrame();
     ImGui::Render();
@@ -261,13 +261,14 @@ void ShaderToyScene::OnUpdate()
 
 void ShaderToyScene::OnRender()
 {
+    // TODO: have engine invoke scene(s) to draw themselves
     // Inform ImGui backends and core that we are starting a new frame, and construct the immediate-mode UI. The UI
     //  will be drawn later via insertions into command list.
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    m_pEngine->NewFrame();
+    m_pEngine->PreRender();
     CbvData frameConstants = {&m_constantBufferData, sizeof(m_constantBufferData)};
     CD3DX12_VIEWPORT newViewport(0.f, 0.f, m_width, m_height, m_camera.GetNearZ(), m_camera.GetFarZ());
     m_pipelineState.SetViewport(newViewport);
