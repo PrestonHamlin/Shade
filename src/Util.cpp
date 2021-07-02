@@ -10,6 +10,9 @@
 using namespace std;
 
 
+//**********************************************************************************************************************
+//                                                      Converters
+//**********************************************************************************************************************
 std::wstring ToWideString(const std::string& str)
 {
     using convert_typeX = std::codecvt_utf8<wchar_t>;
@@ -24,26 +27,6 @@ std::string ToNormalString(const std::wstring& wstr)
     static std::wstring_convert<convert_typeX, wchar_t> converter;
 
     return converter.to_bytes(wstr);
-}
-
-// TODO: wrapper macro and/or LINE preprocessor definition?
-void CheckResult(HRESULT hr, const std::string& msg, bool except)
-{
-    if (FAILED(hr))
-    {
-        std::string outputMessage = std::system_category().message(hr) + "\n\t" + msg + "\n";
-        PrintMessage(Error, outputMessage);
-
-        if (except)
-        {
-            throw std::exception();
-        }
-    }
-}
-
-void CheckResult(HRESULT hr, const std::wstring& msg)
-{
-    CheckResult(hr, ToNormalString(msg));
 }
 
 const std::string HumanReadableFileSize(uint fileSize)
@@ -68,4 +51,27 @@ const std::string HumanReadableFileSize(uint fileSize)
     ss << std::fixed << std::setw(8) << std::left << value << units[scale];
 
     return ss.str();
+}
+
+
+//**********************************************************************************************************************
+//                                              Printing, Logging & Errors
+//**********************************************************************************************************************
+void CheckResult(HRESULT hr, const std::string& msg, bool except)
+{
+    if (FAILED(hr))
+    {
+        std::string outputMessage = std::system_category().message(hr) + "\n\t" + msg + "\n";
+        PrintMessage(Error, outputMessage);
+
+        if (except)
+        {
+            throw std::exception();
+        }
+    }
+}
+
+void CheckResult(HRESULT hr, const std::wstring& msg)
+{
+    CheckResult(hr, ToNormalString(msg));
 }

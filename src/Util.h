@@ -15,29 +15,16 @@
 #include <time.h>
 #include <limits>
 #include <filesystem>
-//#include <system_error>
-//#include <locale>
-//#include <codecvt>
-
-
-// TODO: abstract away resources and their management via engine classes and API
 #include <Windows.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl.h>
 
 #include <fmt/format.h>
-//#include "imported/fmt/include/fmt/format.h"
-
-//#include <experimental/filesystem>
-
 
 using Microsoft::WRL::ComPtr;
-
-
 using uint		= uint32_t;
 using uint64	= uint64_t;
-
 
 //enum class MessageSeverity
 enum MessageSeverity
@@ -57,6 +44,9 @@ static const char* MessageSeverityTags[] =
 };
 
 
+//**********************************************************************************************************************
+//                                                      Converters
+//**********************************************************************************************************************
 template <typename TP>
 std::time_t TimeConvert(TP tp)
 {
@@ -65,15 +55,15 @@ std::time_t TimeConvert(TP tp)
     return system_clock::to_time_t(sctp);
 }
 
-
-
-
 std::wstring ToWideString(const std::string& str);
 std::string ToNormalString(const std::wstring& wstr);
 
+const std::string HumanReadableFileSize(uint fileSize);
 
 
-
+//**********************************************************************************************************************
+//                                              Printing, Logging & Errors
+//**********************************************************************************************************************
 static void PrintMessageHelper(const std::string& format, fmt::format_args args)
 {
     //fmt::vprint(format, args);
@@ -92,57 +82,15 @@ static void PrintMessage(MessageSeverity severity, const std::string& format, co
     PrintMessageHelper(ss.str(), fmt::make_format_args(args...));
 }
 
-
-
 void CheckResult(HRESULT hr, const std::string& msg = "", bool except=false);
 void CheckResult(HRESULT hr, const std::wstring& msg);
 
-const std::string HumanReadableFileSize(uint fileSize);
 
-
+//**********************************************************************************************************************
+//                                                      Wrappers
+//**********************************************************************************************************************
 template <typename ObjectType>
 void SetDebugName(ObjectType* pObject, std::string name)
 {
     pObject->SetPrivateData(WKPDID_D3DDebugObjectName, name.size(), name.c_str());
-}
-
-
-inline HRESULT ReadDataFromFile(LPCWSTR filename, byte** data, UINT* size)
-{
-    using namespace Microsoft::WRL;
-
-    CREATEFILE2_EXTENDED_PARAMETERS extendedParams = {};
-    extendedParams.dwSize = sizeof(CREATEFILE2_EXTENDED_PARAMETERS);
-    extendedParams.dwFileAttributes = FILE_ATTRIBUTE_NORMAL;
-    extendedParams.dwFileFlags = FILE_FLAG_SEQUENTIAL_SCAN;
-    extendedParams.dwSecurityQosFlags = SECURITY_ANONYMOUS;
-    extendedParams.lpSecurityAttributes = nullptr;
-    extendedParams.hTemplateFile = nullptr;
-
-    Wrappers::FileHandle file(CreateFile2(filename, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, &extendedParams));
-    if (file.Get() == INVALID_HANDLE_VALUE)
-    {
-        throw std::exception();
-    }
-
-    FILE_STANDARD_INFO fileInfo = {};
-    if (!GetFileInformationByHandleEx(file.Get(), FileStandardInfo, &fileInfo, sizeof(fileInfo)))
-    {
-        throw std::exception();
-    }
-
-    if (fileInfo.EndOfFile.HighPart != 0)
-    {
-        throw std::exception();
-    }
-
-    *data = reinterpret_cast<byte*>(malloc(fileInfo.EndOfFile.LowPart));
-    *size = fileInfo.EndOfFile.LowPart;
-
-    if (!ReadFile(file.Get(), *data, fileInfo.EndOfFile.LowPart, nullptr, nullptr))
-    {
-        throw std::exception();
-    }
-
-    return S_OK;
 }
