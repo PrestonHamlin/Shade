@@ -113,6 +113,7 @@ private:
     bool                                m_showImGuiDemoWindow;  // demo is primary documentation for ImGui
     bool                                m_showImGuiMetrics;     // useful for debugging draws and UI
     bool                                m_showImGuiStyleEditor; // useful for configuring and debugging UI
+    std::string                         m_menuBarText;
 
     // components
     ShaderToyScene*                     m_pScene;
