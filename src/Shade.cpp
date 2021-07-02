@@ -37,7 +37,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         windowRect.right - windowRect.left,
         windowRect.bottom - windowRect.top,
         nullptr,    // no parent window
-        nullptr,	// no menus
+        nullptr,    // no menus
         hInstance,
         //&engine);
         &scene);

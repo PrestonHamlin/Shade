@@ -23,8 +23,8 @@
 #include <fmt/format.h>
 
 using Microsoft::WRL::ComPtr;
-using uint		= uint32_t;
-using uint64	= uint64_t;
+using uint      = uint32_t;
+using uint64    = uint64_t;
 
 //enum class MessageSeverity
 enum MessageSeverity

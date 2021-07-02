@@ -152,7 +152,7 @@ void Dx12RenderEngine::Init(const HWND window)
 
             ComPtr<IDXGISwapChain1> pSwapChain;
             CheckResult(m_pFactory->CreateSwapChainForHwnd(
-                m_pCommandQueue.Get(),		// Swap chain needs the queue so that it can force a flush on it.
+                m_pCommandQueue.Get(),
                 m_window,
                 &swapChainDesc,
                 nullptr,
