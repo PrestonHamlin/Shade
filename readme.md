@@ -47,7 +47,7 @@ Initial goals are a shader editor and mesh viewer with UI elements like Blender 
     - Option to rename and keep open
 
 #### Current Status
-Shade is currently a fixed-sized window fully rendered via ImGui with several functional menus/widgets and dockable contents. The engine maintains a simple pipeline and affiliated resources to facilitate the UI. The primary pipeline renders a simple rotating cube and exports its render target. There is much spaghetti to be had.
+Shade is currently a fixed-sized window fully rendered via ImGui with several functional menus/widgets and dockable contents. A primary pipeline renders meshes loaded via Assimp and exports its render target. UI responsibility and event callbacks need shifting back to the engine, and the pipeline needs depth testing.
 ![Current rendered content](./render.png)
 
 Longer Term
