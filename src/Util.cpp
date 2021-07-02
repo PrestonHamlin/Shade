@@ -1,6 +1,5 @@
 #include "Util.h"
 
-
 #include <system_error>
 #include <locale>
 #include <codecvt>
@@ -8,14 +7,7 @@
 #include <chrono>
 #include <debugapi.h>
 
-
 using namespace std;
-
-
-
-
-
-
 
 
 std::wstring ToWideString(const std::string& str)
@@ -54,14 +46,6 @@ void CheckResult(HRESULT hr, const std::wstring& msg)
     CheckResult(hr, ToNormalString(msg));
 }
 
-
-// ID3D12Object::SetName is basically this, but with WKPDID_D3DDebugObjectNameW
-void SetDebugName(ID3D12Object* pObject, std::string name)
-{
-    pObject->SetPrivateData(WKPDID_D3DDebugObjectName, name.size(), name.c_str());
-}
-
-
 const std::string HumanReadableFileSize(uint fileSize)
 {
     uint scale = 0;
@@ -85,4 +69,3 @@ const std::string HumanReadableFileSize(uint fileSize)
 
     return ss.str();
 }
-

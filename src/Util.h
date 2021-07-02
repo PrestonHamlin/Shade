@@ -99,7 +99,13 @@ void CheckResult(HRESULT hr, const std::wstring& msg);
 
 const std::string HumanReadableFileSize(uint fileSize);
 
-void SetDebugName(ID3D12Object* pObject, std::string name);
+
+template <typename ObjectType>
+void SetDebugName(ObjectType* pObject, std::string name)
+{
+    pObject->SetPrivateData(WKPDID_D3DDebugObjectName, name.size(), name.c_str());
+}
+
 
 inline HRESULT ReadDataFromFile(LPCWSTR filename, byte** data, UINT* size)
 {
