@@ -45,21 +45,13 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
 
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-            //D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-            //D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-            //D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
         rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
 
         pEngine->CreateRootSignature(&rootSignatureDesc, &m_pRootSignature);
-        //ComPtr<ID3DBlob> signature;
-        //ComPtr<ID3DBlob> error;
-        //CheckResult(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
-        //CheckResult(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
     }
-
 
     // create this pipeline's heaps and committed resources
     {
@@ -71,8 +63,6 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
             rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
             rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
             CheckResult(pDevice->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_pRtvHeap)));
-
-            //m_rtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
             // SRV descriptor heap
             D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
@@ -92,11 +82,8 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
                 nullptr,
                 IID_PPV_ARGS(&m_pConstantBuffer)));
 
-            // Map and initialize the constant buffer. We don't unmap this until the
-            // app closes. Keeping things mapped for the lifetime of the resource is okay.
-            CD3DX12_RANGE readRange(0, 0);		// We do not intend to read from this resource on the CPU.
+            CD3DX12_RANGE readRange(0, 0);
             CheckResult(m_pConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pConstandBufferDataDataBegin)));
-            //memcpy(m_pConstandBufferDataDataBegin, m_pConstantBufferData, sizeof(m_constantBufferDataSize));
         }
         // upload heap (committed resource) for generic usage
         {
@@ -109,7 +96,6 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
                 nullptr,
                 IID_PPV_ARGS(&m_pUploadBuffer)));
 
-            // keep this buffer persistently mapped
             CD3DX12_RANGE readRange(0, 0);
             CheckResult(m_pUploadBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pUploadBufferBegin)));
             m_pUploadBufferEnd = m_pUploadBufferBegin;
@@ -135,7 +121,6 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
             desc.DepthOrArraySize = 1;
             desc.SampleDesc.Count = 1;
             desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-            //desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
             desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
             desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 
@@ -144,7 +129,6 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
                         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
                         D3D12_HEAP_FLAG_NONE,
                         &desc,
-                        //&CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, m_width, m_height),
                         D3D12_RESOURCE_STATE_RENDER_TARGET,
                         nullptr,
                         IID_PPV_ARGS(&m_pRenderTarget)));
@@ -182,7 +166,6 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
     psoDesc.PrimitiveTopologyType           = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     psoDesc.NumRenderTargets                = 1;
     psoDesc.RTVFormats[0]                   = DXGI_FORMAT_R8G8B8A8_UNORM;
-    //psoDesc.RTVFormats[0]                   = DXGI_FORMAT_R32G32B32A32_FLOAT;
     psoDesc.SampleDesc.Count                = 1;
 
     CheckResult(pEngine->CreatePipelineState(&psoDesc, &m_pPipelineState), "compiling pipeline", true);
@@ -202,12 +185,8 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
         SetDebugName(m_pRenderTarget.Get(),     commonString + " render target");
         SetDebugName(m_pUploadBuffer.Get(),     commonString + " upload buffer");
         SetDebugName(m_pGeometryBuffer.Get(),   commonString + " geometry buffer");
+        SetDebugName(m_pConstantBuffer.Get(),   commonString + " constant buffer");
     }
-}
-
-void PipelineState::SetShader(std::string file, ShaderKind type, std::string entry)
-{
-
 }
 
 // TODO: Maintain vector of meshes? Or just some layout metadata for draw instructions?
