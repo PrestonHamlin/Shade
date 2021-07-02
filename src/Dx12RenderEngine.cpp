@@ -7,6 +7,8 @@
 #include "ShaderToyScene.h"
 #include "Widgets.h"
 
+using namespace std;
+
 
 Dx12RenderEngine* Dx12RenderEngine::pCurrentEngine = nullptr;
 
@@ -345,13 +347,30 @@ void Dx12RenderEngine::Flush()
 void Dx12RenderEngine::BuildEngineUi()
 {
     const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+    m_menuBarText = "Hello!";
 
     // Create dockspace before anything else and fill main viewport. This should also supplant the "debug" viewport.
     ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
     // main window menu bar containing drop-down menu dialogues and window controls
-    if (ImGui::BeginMainMenuBar())
     {
+        ImGui::BeginMainMenuBar();
+
+        // drag clear portions of menu bar to move window
+        if (ImGui::IsItemActive()) // while button is held, redraw with drag offset from original position
+        {
+            //PrintMessage("Menu Bar Active\n");
+            ImVec2 dragDelta = ImGui::GetMouseDragDelta(0);
+            m_menuBarText += "\tDrag delta: " + to_string(dragDelta.x) + ", " + to_string(dragDelta.y);
+            SetWindowPos(m_window, nullptr, m_windowPosition.left + dragDelta.x, m_windowPosition.top + dragDelta.y, m_width, m_height, 0);
+        }
+        if (ImGui::IsItemDeactivated()) // since we retained the original position, don't accumulate error or slip
+        {
+            //PrintMessage("Menu Bar Deactiveated\n");
+            GetWindowRect(m_window, &m_windowPosition);
+        }
+
+        // menus and their contents
         if (ImGui::BeginMenu("File"))
         {
             ImGui::MenuItem("New");
@@ -370,13 +389,13 @@ void Dx12RenderEngine::BuildEngineUi()
             ImGui::Checkbox("Show ImGui Style Editor", &m_showImGuiStyleEditor);
             ImGui::Separator();
             ImGui::MenuItem("Foo");
-            ImGui::MenuItem("Bar");
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View"))
         {
             ImGui::Text("This is some menu text");
             ImGui::Separator();
+            ImGui::MenuItem("Bar");
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Help"))
@@ -392,29 +411,9 @@ void Dx12RenderEngine::BuildEngineUi()
 
         // title and status text
         ImGui::Separator();
-        ImGui::Spacing();
         ImGui::Text("Shade");
-
-        // custom nav controls for minimize, maximize, drag to move, etc...
-        if (ImGui::SmallButton("Drag")) // when button is released, save current window position
-        {
-            GetWindowRect(m_window, &m_windowPosition);
-        }
-        if (ImGui::IsItemActive()) // while button is held, redraw with drag offset from original position
-        {
-            ImVec2 dragDelta = ImGui::GetMouseDragDelta(0);
-            ImGui::Text("Drag delta: %f, %f", dragDelta.x, dragDelta.y);
-
-            SetWindowPos(m_window, nullptr, m_windowPosition.left + dragDelta.x, m_windowPosition.top + dragDelta.y, m_width, m_height, 0);
-        }
-
-        // invisible button for drag controls rather than hook title bar events?
-        static std::string msg = "hello";
-        if (ImGui::InvisibleButton("invis", { 10,10 }))
-        {
-            msg = "world";
-        }
-        ImGui::Text(msg.c_str());
+        ImGui::Separator();
+        ImGui::Text(m_menuBarText.c_str());
 
         // minimize, maximize, quit
         ImGui::SameLine(ImGui::GetWindowWidth()-50);
@@ -429,19 +428,6 @@ void Dx12RenderEngine::BuildEngineUi()
         ImGui::PopStyleColor(3);
 
         ImGui::EndMainMenuBar();
-    }
-
-    // display mode info
-    {
-        ImGui::Begin("Display Info");
-        ImGui::Separator();
-        ImGui::Text("ImGui main viewport");
-        ImGui::Text("Window: %.1f,%.1f, %.1fx%.1f", mainViewport->Pos.x, mainViewport->Pos.y, mainViewport->Size.x, mainViewport->Size.y);
-        ImGui::Text("Client: %.1f,%.1f, %.1fx%.1f", mainViewport->WorkPos.x, mainViewport->WorkPos.y, mainViewport->WorkSize.x, mainViewport->WorkSize.y);
-        ImGui::Text("Rect:   %i,%i,%i,%i %ix%i", m_windowPosition.left, m_windowPosition.top, m_windowPosition.right, m_windowPosition.bottom,
-                                                 m_windowPosition.right - m_windowPosition.left, m_windowPosition.bottom - m_windowPosition.top);
-        ImGui::Separator();
-        ImGui::End();
     }
 
     // toggleable menus
@@ -464,6 +450,19 @@ void Dx12RenderEngine::BuildEngineUi()
         {
             ImGui::ShowStyleEditor();
         }
+    }
+
+    // display mode info
+    {
+        ImGui::Begin("Display Info");
+        ImGui::Separator();
+        ImGui::Text("ImGui main viewport");
+        ImGui::Text("Window: %.1f,%.1f, %.1fx%.1f", mainViewport->Pos.x, mainViewport->Pos.y, mainViewport->Size.x, mainViewport->Size.y);
+        ImGui::Text("Client: %.1f,%.1f, %.1fx%.1f", mainViewport->WorkPos.x, mainViewport->WorkPos.y, mainViewport->WorkSize.x, mainViewport->WorkSize.y);
+        ImGui::Text("Rect:   %i,%i,%i,%i %ix%i", m_windowPosition.left, m_windowPosition.top, m_windowPosition.right, m_windowPosition.bottom,
+                                                 m_windowPosition.right - m_windowPosition.left, m_windowPosition.bottom - m_windowPosition.top);
+        ImGui::Separator();
+        ImGui::End();
     }
 
     // engine/environment configuration details
