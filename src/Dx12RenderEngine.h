@@ -59,8 +59,8 @@ public:
     uint GetCbvSrvUavDescriptorSize() {m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);}
     void SetScene(ShaderToyScene* pScene) {m_pScene = pScene;}
 
-    // debug helpers
-    void* Dx12RenderEngine::SetSrv(ComPtr<ID3D12Resource> pResource);
+    // debug and global UI
+    D3D12_GPU_DESCRIPTOR_HANDLE AddSrvForResource(D3D12_SHADER_RESOURCE_VIEW_DESC desc, ComPtr<ID3D12Resource> pResource);
 
 
     // have this be a single static globally-accessible instance
@@ -96,7 +96,9 @@ private:
     UINT8*                              m_pUploadBufferEnd;     // end of last added element
     ComPtr<ID3D12Resource>              m_pGeometryBuffer;      // committed resource for scene geometry data
     uint                                m_geometryBufferOffset; // offset to next free spot
-    UINT                                m_rtvDescriptorSize;    // offset into RTV descriptor heap for next RTV
+    uint                                m_rtvDescriptorSize;    // offset into RTV descriptor heap for next RTV
+    uint                                m_srvDescriptorSize;
+    uint                                m_srvCount;
     float                               m_clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
     // synchronization objects

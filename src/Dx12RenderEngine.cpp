@@ -23,6 +23,8 @@ Dx12RenderEngine::Dx12RenderEngine(UINT width, UINT height) :
     m_pUploadBufferEnd(nullptr),
     m_geometryBufferOffset(0),
     m_rtvDescriptorSize(0),
+    m_srvDescriptorSize(0),
+    m_srvCount(0),
     m_frameIndex(0),
     m_pFenceEvent(nullptr),
     m_fenceValue(0),
@@ -110,10 +112,12 @@ void Dx12RenderEngine::Init(const HWND window)
 
             // SRV descriptor heap
             D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-            srvHeapDesc.NumDescriptors = 3;
+            srvHeapDesc.NumDescriptors = 1024;
             srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
             srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             CheckResult(m_pDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_pSrvHeap)));
+
+            m_srvDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
 
         // upload heap (committed resource) for generic usage
@@ -218,6 +222,7 @@ void Dx12RenderEngine::Init(const HWND window)
         ImGui_ImplDX12_Init(m_pDevice.Get(), 2, DXGI_FORMAT_R8G8B8A8_UNORM, m_pSrvHeap.Get(),
                             m_pSrvHeap->GetCPUDescriptorHandleForHeapStart(), m_pSrvHeap->GetGPUDescriptorHandleForHeapStart());
         ImGui_ImplWin32_Init(window);
+        m_srvCount++; // entry 0 is used for text glyphs
 
         // configure fonts for ImGui
         {
@@ -498,17 +503,15 @@ void Dx12RenderEngine::BuildEngineUi()
 
     // display all SRV heap resources in use
     {
-        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_pSrvHeap->GetGPUDescriptorHandleForHeapStart();
-        const uint offsetSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_pSrvHeap->GetGPUDescriptorHandleForHeapStart());
 
         ImGui::Begin("Engine Srv Heap Contents");
-        ImGui::Image((ImTextureID)gpuHandle.ptr, { 200.0f, 200 });
-        ImGui::Separator();
-        gpuHandle.ptr += offsetSize;
-        ImGui::Image((ImTextureID)gpuHandle.ptr, { 200.0f, 200 });
-        ImGui::Separator();
-        gpuHandle.ptr += offsetSize;
-        ImGui::Image((ImTextureID)gpuHandle.ptr, { 200.0f, 200 });
+        for (uint i = 0; i < m_srvCount; ++i)
+        {
+            ImGui::Image((ImTextureID)gpuHandle.ptr, { 200.0f, 200 });
+            ImGui::Separator();
+            gpuHandle.Offset(1, m_srvDescriptorSize);
+        }
         ImGui::End();
     }
 }
@@ -693,27 +696,17 @@ void Dx12RenderEngine::CopyResource(ComPtr<ID3D12Resource> pDst, ComPtr<ID3D12Re
 
 
 //**********************************************************************************************************************
-//                                                      Debug
+//                                                  Debug & Global UI
 //**********************************************************************************************************************
-void* Dx12RenderEngine::SetSrv(ComPtr<ID3D12Resource> pResource)
+D3D12_GPU_DESCRIPTOR_HANDLE Dx12RenderEngine::AddSrvForResource(D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc, ComPtr<ID3D12Resource> pResource)
 {
-    // TODO: rework
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    //srvDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = 1;
+    const uint index = m_srvCount++;
+    CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(m_pSrvHeap->GetCPUDescriptorHandleForHeapStart(), index, m_srvDescriptorSize);
+    CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_pSrvHeap->GetGPUDescriptorHandleForHeapStart(), index, m_srvDescriptorSize);
 
-    // SRV descriptor #0 is used for ImGui glyphs, so use #1
-    UINT offset = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(m_pSrvHeap->GetCPUDescriptorHandleForHeapStart(), 1, offset);
-    m_pDevice->CreateShaderResourceView(pResource.Get(), &srvDesc, srvHandle);
+    m_pDevice->CreateShaderResourceView(pResource.Get(), &srvDesc, cpuHandle);
 
-    // ImGui wants an opaque handle to hold onto, so we give it the GPU address of the descriptor
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_pSrvHeap->GetGPUDescriptorHandleForHeapStart();
-    gpuHandle.ptr += m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    return (void*)gpuHandle.ptr;
+    return gpuHandle;
 }
 
 

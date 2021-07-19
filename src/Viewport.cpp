@@ -2,65 +2,114 @@
 
 uint Viewport::NumViewports = 0;
 
-// TODO: use Resource class
 
-
+//**********************************************************************************************************************
+//                                              Viewport Virtual Class
+//**********************************************************************************************************************
 Viewport::Viewport() :
     m_viewportId(NumViewports++),
     m_isValid(false),
     m_pEngine(Dx12RenderEngine::pCurrentEngine)
 {
-
 }
 Viewport::~Viewport()
 {
-
 }
-
-
 
 // default initialization creates new dedicated resource
-void Viewport::Init(std::string name)
+void Viewport::Init(std::string name, DXGI_FORMAT format)
 {
-    m_name = name;
-
-    D3D12_RESOURCE_DESC textureDesc = {};
-    //textureDesc.MipLevels = 1;
-    //textureDesc.Format = DXGI_FORMAT_R32G32B32A32_TYPELESS;
-    textureDesc.Format = DXGI_FORMAT_R8G8B8A8_TYPELESS;
-    textureDesc.Width = 800;
-    textureDesc.Height = 800;
-    textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-    textureDesc.DepthOrArraySize = 1;
-    textureDesc.SampleDesc.Count = 1;
-    //textureDesc.SampleDesc.Quality = 0;
-    textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-
-    CheckResult(m_pEngine->GetDevice()->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-        D3D12_HEAP_FLAG_NONE,
-        &textureDesc,
-        //D3D12_RESOURCE_STATE_COPY_DEST,
-        //D3D12_RESOURCE_STATE_COMMON,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        nullptr,
-        IID_PPV_ARGS(&m_pResource)));
-
-    SetDebugName(m_pResource.Get(), name);
+    // TODO: rework
 }
 
-
-
+void Viewport::SubmitWork()
+{
+}
 
 void Viewport::DrawUI()
 {
-    // since this is a UI element, the engine's SRV heap is used
-    void* pGpuMem = m_pEngine->SetSrv(m_pResource);
+    if (m_isPinnedView) DrawPinnedResource();
+    else                DrawReferencedResource();
+}
 
+void Viewport::DrawReferencedResource()
+{
     ImGui::Begin(m_name.c_str());
-
-    ImGui::Text("resource view should go here...");
-    ImGui::Image((ImTextureID)pGpuMem, {200.0f, 200});
-
+    ImGui::Text("referenced resource view");
+    ImGui::Image((ImTextureID)m_srvHandle.ptr, {200.0f, 200});
     ImGui::End();
+}
+
+void Viewport::DrawPinnedResource()
+{
+    ImGui::Begin(m_name.c_str());
+    ImGui::Text("pinned resource view");
+    ImGui::Image((ImTextureID)m_srvHandlePinned.ptr, {200.0f, 200});
+    ImGui::End();
+}
+
+
+//**********************************************************************************************************************
+//                                              Render Target Viewport
+//**********************************************************************************************************************
+ViewportRenderTarget::ViewportRenderTarget() :
+    Viewport()
+{
+}
+ViewportRenderTarget::~ViewportRenderTarget()
+{
+}
+
+void ViewportRenderTarget::Init(std::string name, ComPtr<ID3D12Resource> pResource)
+{
+    m_name = name;
+    m_pResource = pResource;
+    m_isPinnedView = false;
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+    m_srvHandle = m_pEngine->AddSrvForResource(srvDesc, pResource);
+
+    m_isValid = true;
+}
+
+void ViewportRenderTarget::DrawUI()
+{
+    Viewport::DrawUI();
+}
+
+
+//**********************************************************************************************************************
+//                                              Depth Texture Viewport
+//**********************************************************************************************************************
+ViewportDepthTexture::ViewportDepthTexture() :
+    Viewport()
+{
+}
+ViewportDepthTexture::~ViewportDepthTexture()
+{
+}
+
+void ViewportDepthTexture::Init(std::string name, ComPtr<ID3D12Resource> pResource)
+{
+    m_name = name;
+    m_pResource = pResource;
+    m_isPinnedView = false;
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+    m_srvHandle = m_pEngine->AddSrvForResource(srvDesc, pResource);
+
+    m_isValid = true;
+}
+
+void ViewportDepthTexture::DrawUI()
+{
+    Viewport::DrawUI();
 }

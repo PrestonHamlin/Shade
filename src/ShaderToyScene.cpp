@@ -26,7 +26,7 @@ void ShaderToyScene::Init(Dx12RenderEngine* pEngine)
     m_pipelineState.SetClearColor(m_clearColor);
     m_pipelineState.AddMesh(&m_mesh);
 
-    m_viewport.Init("primary pipeline RTV");
+    m_viewportForRtv.Init("RTV Viewport", m_pipelineState.GetRenderTarget());
 }
 
 void ShaderToyScene::BuildUI()
@@ -98,7 +98,7 @@ void ShaderToyScene::BuildUI()
     }
 
     // viewports
-    m_viewport.DrawUI();
+    m_viewportForRtv.DrawUI();
 }
 
 void ShaderToyScene::OnUpdate()
@@ -130,5 +130,4 @@ void ShaderToyScene::OnRender()
     m_pipelineState.SetConstantBufferData(frameConstants);
     m_pipelineState.Render();
     m_pipelineState.Execute();
-    m_pEngine->CopyResource(m_viewport.GetResource(), m_pipelineState.GetRenderTarget());
 }

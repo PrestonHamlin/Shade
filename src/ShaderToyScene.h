@@ -29,7 +29,7 @@ private:
     PipelineState                       m_pipelineState;
     Mesh                                m_mesh;
     Camera                              m_camera;
-    Viewport                            m_viewport;
+    ViewportRenderTarget                m_viewportForRtv;
 
     // scene data
     std::wstring                        m_name;
