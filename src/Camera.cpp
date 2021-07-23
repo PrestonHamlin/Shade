@@ -32,7 +32,6 @@ void Camera::Update()
     float r = cos(m_pitch);
     m_direction.x = r * sin(m_yaw);
     m_direction.y =     sin(m_pitch);
-    m_direction.z = r * cos(m_yaw);
 }
 
 void Camera::Move(XMFLOAT3 displacement)
@@ -53,7 +52,6 @@ void Camera::Rotate(XMFLOAT3 angles)
     XMMATRIX rotations = XMMatrixRotationX(angles.x) *
                          XMMatrixRotationY(angles.y) *
                          XMMatrixRotationZ(angles.z);
-
 }
 void Camera::Rotate(float alpha, float beta, float gamma)
 {
@@ -84,7 +82,9 @@ XMMATRIX Camera::GetViewMatrix()
 {
     return XMMatrixLookToLH(XMLoadFloat3(&m_position), XMLoadFloat3(&m_direction), XMLoadFloat3(&m_up));
 }
+
 XMMATRIX Camera::GetProjectionMatrix()
 {
-    return XMMatrixPerspectiveFovLH(XMConvertToRadians(m_fieldOfView), m_aspectRatio, m_nearZ, m_farZ);
+    return m_reverseZ ? XMMatrixPerspectiveFovLH(XMConvertToRadians(m_fieldOfView), m_aspectRatio, m_farZ, m_nearZ)
+                      : XMMatrixPerspectiveFovLH(XMConvertToRadians(m_fieldOfView), m_aspectRatio, m_nearZ, m_farZ);
 }

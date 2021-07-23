@@ -70,6 +70,13 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
             srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
             srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             CheckResult(pDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_pSrvHeap)));
+
+            // DSV descriptor heap
+            D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
+            dsvHeapDesc.NumDescriptors = 1;
+            dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+            dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+            CheckResult(pDevice->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_pDsvHeap)));
         }
 
         // constant buffer for per-frame data
@@ -137,6 +144,25 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
             CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart());
             pDevice->CreateRenderTargetView(m_pRenderTarget.Get(), nullptr, rtvHandle);
         }
+
+        // depth stencil
+        {
+            D3D12_DEPTH_STENCIL_VIEW_DESC depthStencilDesc = {};
+            depthStencilDesc.Format = DXGI_FORMAT_D32_FLOAT;
+            depthStencilDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+            depthStencilDesc.Flags = D3D12_DSV_FLAG_NONE;
+
+            CheckResult(pDevice->CreateCommittedResource(
+                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+                D3D12_HEAP_FLAG_NONE,
+                &CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_TYPELESS, 800, 800, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL),
+                D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                &CD3DX12_CLEAR_VALUE(DXGI_FORMAT_D32_FLOAT, 0.0f, 0),
+                IID_PPV_ARGS(&m_pDepthStencil)
+                ));
+
+            pDevice->CreateDepthStencilView(m_pDepthStencil.Get(), &depthStencilDesc, m_pDsvHeap->GetCPUDescriptorHandleForHeapStart());
+        }
     }
 
     static Shader vertexShader, pixelShader;
@@ -160,8 +186,8 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
     psoDesc.PS                              = CD3DX12_SHADER_BYTECODE(pixelShader.GetBlob());
     psoDesc.RasterizerState                 = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
     psoDesc.BlendState                      = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-    psoDesc.DepthStencilState.DepthEnable   = FALSE;
-    psoDesc.DepthStencilState.StencilEnable = FALSE;
+    psoDesc.DepthStencilState               = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);;
+    psoDesc.DSVFormat                       = DXGI_FORMAT_D32_FLOAT;
     psoDesc.SampleMask                      = UINT_MAX;
     psoDesc.PrimitiveTopologyType           = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     psoDesc.NumRenderTargets                = 1;
@@ -169,23 +195,27 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
     psoDesc.SampleDesc.Count                = 1;
 
     CheckResult(pEngine->CreatePipelineState(&psoDesc, &m_pPipelineState), "compiling pipeline", true);
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
+    CheckResult(pEngine->CreatePipelineState(&psoDesc, &m_pPipelineStateReverseDepth), "compiling reverse-depth pipeline", true);
     m_compiled = true;
 
     // set debug names
     {
         std::string commonString = "Pipeline #" + std::to_string(m_pipelineId);
-        SetDebugName(m_pCommandAllocator.Get(), commonString + " command allocator");
-        SetDebugName(m_pCommandList.Get(),      commonString + " command list");
+        SetDebugName(m_pCommandAllocator.Get(),             commonString + " command allocator");
+        SetDebugName(m_pCommandList.Get(),                  commonString + " command list");
 
-        SetDebugName(m_pRootSignature.Get(),    commonString + " root signature");
-        SetDebugName(m_pRtvHeap.Get(),          commonString + " RTV descriptor heap");
-        SetDebugName(m_pSrvHeap.Get(),          commonString + " SRV descriptor heap");
-        SetDebugName(m_pPipelineState.Get(),    commonString + " PSO");
+        SetDebugName(m_pRootSignature.Get(),                commonString + " root signature");
+        SetDebugName(m_pRtvHeap.Get(),                      commonString + " RTV descriptor heap");
+        SetDebugName(m_pSrvHeap.Get(),                      commonString + " SRV descriptor heap");
+        SetDebugName(m_pPipelineState.Get(),                commonString + " PSO");
+        SetDebugName(m_pPipelineStateReverseDepth.Get(),    commonString + " reverse-depth PSO");
 
-        SetDebugName(m_pRenderTarget.Get(),     commonString + " render target");
-        SetDebugName(m_pUploadBuffer.Get(),     commonString + " upload buffer");
-        SetDebugName(m_pGeometryBuffer.Get(),   commonString + " geometry buffer");
-        SetDebugName(m_pConstantBuffer.Get(),   commonString + " constant buffer");
+        SetDebugName(m_pRenderTarget.Get(),                 commonString + " render target");
+        SetDebugName(m_pUploadBuffer.Get(),                 commonString + " upload buffer");
+        SetDebugName(m_pGeometryBuffer.Get(),               commonString + " geometry buffer");
+        SetDebugName(m_pConstantBuffer.Get(),               commonString + " constant buffer");
+        SetDebugName(m_pDepthStencil.Get(),                 commonString + " depth stencil");
     }
 }
 
@@ -230,7 +260,7 @@ void PipelineState::AddMesh(Mesh* pMesh)
 void PipelineState::Render()
 {
     CheckResult(m_pCommandAllocator->Reset());
-    CheckResult(m_pCommandList->Reset(m_pCommandAllocator.Get(), m_pPipelineState.Get()));
+    CheckResult(m_pCommandList->Reset(m_pCommandAllocator.Get(), m_reverseDepth ? m_pPipelineStateReverseDepth.Get() : m_pPipelineState.Get()));
 
     // specify resource layouts and bindings
     m_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
@@ -242,11 +272,12 @@ void PipelineState::Render()
     m_pCommandList->RSSetViewports(1, &m_viewport);
     m_pCommandList->RSSetScissorRects(1, &m_scissorRect);
 
-    // specify and prep render target(s)
+    // specify and prep render target(s) and affiliated resources
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart());
-    m_pCommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
-    if (m_pClearColor == nullptr) m_pCommandList->ClearRenderTargetView(rtvHandle, m_clearColor, 0, nullptr);
-    else                          m_pCommandList->ClearRenderTargetView(rtvHandle, m_pClearColor, 0, nullptr);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_pDsvHeap->GetCPUDescriptorHandleForHeapStart());
+    m_pCommandList->OMSetRenderTargets(1, &rtvHandle, false, &dsvHandle);
+    m_pCommandList->ClearRenderTargetView(rtvHandle, (m_pClearColor == nullptr) ? m_clearColor : m_pClearColor, 0, nullptr);
+    m_pCommandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, m_reverseDepth ? 0.0 : 1.0f, 0, 0, nullptr);
 
     // configure Input Assembler
     m_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -267,5 +298,11 @@ void PipelineState::SetConstantBufferData(CbvData data)
     m_pConstantBufferData    = data.pData;
     m_constantBufferDataSize = data.size;
 
+    UpdateConstantBufferData();
+}
+
+void PipelineState::UpdateConstantBufferData()
+{
+    assert(m_pConstantBufferData != nullptr);
     memcpy(m_pConstandBufferDataDataBegin, m_pConstantBufferData, m_constantBufferDataSize);
 }

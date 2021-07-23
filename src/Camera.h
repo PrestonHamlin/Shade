@@ -43,6 +43,7 @@ public:
     XMFLOAT3 GetUpVector()              {return m_up;}
     float GetNearZ()                    {return m_nearZ;}
     float GetFarZ()                     {return m_farZ;}
+    void ReverseZ(bool enable)          {m_reverseZ = enable;}
 
 private:
     XMFLOAT3                            m_position;
@@ -56,4 +57,5 @@ private:
     float                               m_aspectRatio;
     float                               m_nearZ;
     float                               m_farZ;
+    bool                                m_reverseZ;
 };

@@ -21,7 +21,7 @@ private:
     struct SceneConstantBuffer
     {
         XMFLOAT4 angles;
-        XMMATRIX MVP;
+        XMFLOAT4X4 MVP;
     };
 
     // components
@@ -30,6 +30,7 @@ private:
     Mesh                                m_mesh;
     Camera                              m_camera;
     ViewportRenderTarget                m_viewportForRtv;
+    ViewportDepthTexture                m_viewportForDepth;
 
     // scene data
     std::wstring                        m_name;
@@ -38,4 +39,5 @@ private:
     DirectX::XMMATRIX                   m_modelMatrix;
     DirectX::XMMATRIX                   m_viewMatrix;
     DirectX::XMMATRIX                   m_projectionMatrix;
+    bool                                m_reverseDepth;
 };

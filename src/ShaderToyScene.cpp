@@ -19,14 +19,18 @@ void ShaderToyScene::Init(Dx12RenderEngine* pEngine)
     m_pEngine = pEngine;
 
     m_mesh.LoadFromFile("./media/rotated_teapot.ply");
-    m_camera.SetPosition({0, 10, -45});
-    m_camera.SetDirection({0, -10, 45});
+    m_camera.SetPosition({0, 5, -45});
+    m_camera.SetDirection({0, 0, 1});
+
+    // TODO: actually use PipelineCreateInfo...
     PipelineCreateInfo pipelineCreateInfo = {};
     m_pipelineState.Init(pipelineCreateInfo);
+    m_pipelineState.SetConstantBufferData({&m_constantBufferData, sizeof(m_constantBufferData)});
     m_pipelineState.SetClearColor(m_clearColor);
     m_pipelineState.AddMesh(&m_mesh);
 
     m_viewportForRtv.Init("RTV Viewport", m_pipelineState.GetRenderTarget());
+    m_viewportForDepth.Init("Depth Viewport", m_pipelineState.GetDepthStencil());
 }
 
 void ShaderToyScene::BuildUI()
@@ -57,6 +61,12 @@ void ShaderToyScene::BuildUI()
         if (ImGui::Button("MinZ--")) m_camera.DecreaseNearZ();  ImGui::SameLine();
         if (ImGui::Button("MaxZ++")) m_camera.IncreaseFarZ();   ImGui::SameLine();
         if (ImGui::Button("MaxZ--")) m_camera.DecreaseFarZ();
+
+        if (ImGui::Checkbox("Reverse Depth", &m_reverseDepth))
+        {
+            m_camera.ReverseZ(m_reverseDepth);
+            m_pipelineState.SetReverseDepth(m_reverseDepth);
+        }
 
         ImGui::End();
     }
@@ -99,6 +109,7 @@ void ShaderToyScene::BuildUI()
 
     // viewports
     m_viewportForRtv.DrawUI();
+    m_viewportForDepth.DrawUI();
 }
 
 void ShaderToyScene::OnUpdate()
@@ -107,27 +118,22 @@ void ShaderToyScene::OnUpdate()
 
     // model
     // TODO: model coordinates
+    m_modelMatrix = XMMatrixIdentity();
 
     // view
     m_viewMatrix = m_camera.GetViewMatrix();
 
     // projection
-    //m_projectionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(m_fieldOfViewAngle), m_aspectRatio, 0.1f, 1.0f);
     m_projectionMatrix = m_camera.GetProjectionMatrix();
 
     // update MVP matrix
-    //XMMATRIX mvpMatrix = XMMatrixMultiply(m_ModelMatrix, m_ViewMatrix);
-    XMMATRIX mvpMatrix = XMMatrixMultiply(XMMatrixIdentity(), m_viewMatrix);
-    mvpMatrix = XMMatrixMultiply(mvpMatrix, m_projectionMatrix);
-    m_constantBufferData.MVP = mvpMatrix;
+    XMMATRIX mvpMatrix = XMMatrixTranspose(m_modelMatrix * m_viewMatrix * m_projectionMatrix);
+    XMStoreFloat4x4(&m_constantBufferData.MVP, mvpMatrix);
 }
 
 void ShaderToyScene::OnRender()
 {
-    CbvData frameConstants = {&m_constantBufferData, sizeof(m_constantBufferData)};
-    CD3DX12_VIEWPORT newViewport(0.f, 0.f, 800, 800, m_camera.GetNearZ(), m_camera.GetFarZ());
-    m_pipelineState.SetViewport(newViewport);
-    m_pipelineState.SetConstantBufferData(frameConstants);
+    m_pipelineState.UpdateConstantBufferData();
     m_pipelineState.Render();
     m_pipelineState.Execute();
 }
