@@ -4,6 +4,7 @@
 media/*
 *.zip
 *.7z
+*.wpix
 
 # My default generation/build location and potential deployment locations
 build/*
