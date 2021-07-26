@@ -10,6 +10,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <DirectXMath.h>
 
 
 enum MeshFileFormat
@@ -37,6 +38,7 @@ class Mesh
 public:
     Mesh();
     Mesh(std::string filename);
+    Mesh(Mesh& other);
     ~Mesh();
 
     // main functionality
@@ -52,7 +54,7 @@ public:
 
 private:
     static std::map<std::string, MeshFileFormat> FileExtensionMap;
-    Assimp::Importer m_importer;
+    static Assimp::Importer m_importer;
     aiScene* m_pScene;
 
     bool m_isValidMesh;

@@ -3,8 +3,11 @@
 using namespace std;
 using namespace std::filesystem;
 using namespace Assimp;
-//using namespace std::experimental::filesystem::v1;
+using namespace DirectX;
 
+
+//Assimp::Importer Mesh::m_importer = Assimp::Importer();
+Assimp::Importer Mesh::m_importer;
 
 map<string, MeshFileFormat> Mesh::FileExtensionMap = {
     {"",        UnknownFormat},
@@ -20,15 +23,32 @@ Mesh::Mesh()
 
 Mesh::Mesh(string filename)
     :
-    m_filename(filename),
     m_isValidMesh(false)
 {
     LoadFromFile(filename);
 }
 
+Mesh::Mesh(Mesh& other)
+{
+    m_filename    = other.m_filename;
+    m_pScene      = other.m_pScene;
+    m_isValidMesh = other.m_isValidMesh;
+
+    other.m_pScene      = nullptr;
+    other.m_isValidMesh = false;
+}
+
 Mesh::~Mesh()
 {
-    m_importer.FreeScene();
+    if (m_isValidMesh)
+    {
+        m_importer.FreeScene();
+    }
+
+    if (m_pScene != nullptr)
+    {
+        delete m_pScene;
+    }
 }
 
 HRESULT Mesh::LoadFromFile(string filename)
@@ -57,6 +77,8 @@ HRESULT Mesh::LoadFromFile(string filename)
         }
         else
         {
+            // TODO: use dynamically allocated storage
+            m_pScene = m_importer.GetOrphanedScene(); // detach scene from importer
             PrintMessage(Info,
                          "{} loaded:\n"
                          "\t{} meshes, {} materials, {} textures\n"
@@ -92,6 +114,7 @@ HRESULT Mesh::LoadFromFile(string filename)
             }
 
             m_isValidMesh = true;
+            m_filename = filename;
             result = S_OK;
         }
     }

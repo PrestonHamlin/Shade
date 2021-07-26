@@ -725,7 +725,9 @@ void Dx12RenderEngine::PopulateCommandList()
     m_pCommandList->ClearRenderTargetView(rtvHandle, m_clearColor, 0, nullptr);
 
     // insert ImGui draw commands into engine command list
+    // TODO: transition viewport resources to READ
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_pCommandList.Get());
+    // TODO: transition viewport resources back
 
     // transition back buffer to present mode prior to present
     m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pRenderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));

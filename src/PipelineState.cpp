@@ -13,7 +13,6 @@ PipelineState::PipelineState()
     m_scissorRect(0, 0, 800, 800)
 {
 }
-
 PipelineState::PipelineState(PipelineCreateInfo createInfo)
     :
     m_pipelineId(m_pipelineIdCounter++),
@@ -22,7 +21,6 @@ PipelineState::PipelineState(PipelineCreateInfo createInfo)
 {
     Init(createInfo);
 }
-
 PipelineState::~PipelineState()
 {
 }
@@ -91,33 +89,6 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
 
             CD3DX12_RANGE readRange(0, 0);
             CheckResult(m_pConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pConstandBufferDataDataBegin)));
-        }
-        // upload heap (committed resource) for generic usage
-        {
-            constexpr uint uploadBufferSize = 32*1024*1024;
-            CheckResult(pDevice->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-                D3D12_HEAP_FLAG_NONE,
-                &CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize),
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr,
-                IID_PPV_ARGS(&m_pUploadBuffer)));
-
-            CD3DX12_RANGE readRange(0, 0);
-            CheckResult(m_pUploadBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pUploadBufferBegin)));
-            m_pUploadBufferEnd = m_pUploadBufferBegin;
-            m_uploadBufferOffset = 0;
-        }
-        // default heap (committed resource) for geometry data
-        {
-            constexpr uint geometryBufferSize = 8*1024*1024;
-            CheckResult(pDevice->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-                D3D12_HEAP_FLAG_NONE,
-                &CD3DX12_RESOURCE_DESC::Buffer(geometryBufferSize),
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr,
-                IID_PPV_ARGS(&m_pGeometryBuffer)));
         }
 
         // render target
@@ -212,49 +183,9 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
         SetDebugName(m_pPipelineStateReverseDepth.Get(),    commonString + " reverse-depth PSO");
 
         SetDebugName(m_pRenderTarget.Get(),                 commonString + " render target");
-        SetDebugName(m_pUploadBuffer.Get(),                 commonString + " upload buffer");
-        SetDebugName(m_pGeometryBuffer.Get(),               commonString + " geometry buffer");
         SetDebugName(m_pConstantBuffer.Get(),               commonString + " constant buffer");
         SetDebugName(m_pDepthStencil.Get(),                 commonString + " depth stencil");
     }
-}
-
-// TODO: Maintain vector of meshes? Or just some layout metadata for draw instructions?
-void PipelineState::AddMesh(Mesh* pMesh)
-{
-    m_meshes.push_back(pMesh);
-
-    // TODO: programattically control residency of meshes
-    MeshBufferLayout layout = pMesh->PopulateGeometryBuffer(m_pUploadBufferBegin);
-    m_pUploadBufferEnd += layout.totalSize;
-
-    // this should be done per draw
-    m_vertexBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress();
-    m_vertexBufferView.StrideInBytes = sizeof(aiVector3D);
-    m_vertexBufferView.SizeInBytes = layout.vertexSize;
-
-    m_colorBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress() + layout.colorOffset;
-    m_colorBufferView.StrideInBytes = sizeof(aiColor4D);
-    m_colorBufferView.SizeInBytes = layout.colorSize;
-
-    m_normalBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress() + layout.normalOffset;
-    m_normalBufferView.StrideInBytes = sizeof(aiVector3D);
-    m_normalBufferView.SizeInBytes = layout.normalSize;
-
-    m_indexBufferView.BufferLocation = m_pUploadBuffer->GetGPUVirtualAddress() + layout.facesOffset;
-    m_indexBufferView.Format = DXGI_FORMAT_R32_UINT;
-    m_indexBufferView.SizeInBytes = layout.facesSize;
-
-    PrintMessage("\nVertex Buffer: {}B @ {}"
-                 "\nColor Buffer:  {}B @ {}"
-                 "\nNormal Buffer: {}B @ {}"
-                 "\nIndex Buffer:  {}B @ {}"
-                 "\n",
-                 m_vertexBufferView.SizeInBytes, m_vertexBufferView.BufferLocation,
-                 m_colorBufferView.SizeInBytes, m_colorBufferView.BufferLocation,
-                 m_normalBufferView.SizeInBytes, m_normalBufferView.BufferLocation,
-                 m_indexBufferView.SizeInBytes, m_indexBufferView.BufferLocation
-                 );
 }
 
 void PipelineState::Render()
@@ -279,17 +210,52 @@ void PipelineState::Render()
     m_pCommandList->ClearRenderTargetView(rtvHandle, (m_pClearColor == nullptr) ? m_clearColor : m_pClearColor, 0, nullptr);
     m_pCommandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, m_reverseDepth ? 0.0 : 1.0f, 0, 0, nullptr);
 
-    // configure Input Assembler
-    m_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    m_pCommandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
-    m_pCommandList->IASetVertexBuffers(1, 1, &m_colorBufferView);
-    m_pCommandList->IASetIndexBuffer(&m_indexBufferView);
-
-    // issue draw
-    m_pCommandList->DrawIndexedInstanced(m_meshes[0]->GetNumFaces()*3, 1, 0, 0, 0);
+    // issue draws
+    DrawAllGeometry();
 
     // close command list in preparation for later execution
     CheckResult(m_pCommandList->Close());
+}
+
+void PipelineState::DrawAllGeometry()
+{
+    DrawableType type;
+    const auto begin = m_pGeometryManager->GetDrawables()->begin();
+    const auto end = m_pGeometryManager->GetDrawables()->end();
+
+    for (auto itr = begin; itr != end; ++itr)
+    {
+        if (!itr->shouldDraw) continue;
+
+        switch (itr->drawableType)
+        {
+        case StaticMeshDrawable:
+        {
+            DrawStaticMesh(*itr);
+            break;
+        }
+        case UnknownDrawable:
+        default:
+        {
+            assert(false);
+            break;
+        }
+        }
+    }
+}
+
+void PipelineState::DrawStaticMesh(const Drawable& drawable)
+{
+    MeshBufferViews meshViews = m_pGeometryManager->GetMeshBufferView(drawable.meshID);
+
+    m_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_pCommandList->IASetVertexBuffers(0, 1, &meshViews.vertexBufferView);
+    m_pCommandList->IASetVertexBuffers(1, 1, &meshViews.colorBufferView);
+    m_pCommandList->IASetIndexBuffer(&meshViews.indexBufferView);
+    m_pCommandList->SetGraphicsRootConstantBufferView(0, m_pConstantBuffer->GetGPUVirtualAddress());
+
+    const uint numTriangles = m_pGeometryManager->GetMesh(drawable.meshID)->GetNumFaces()*3;
+    m_pCommandList->DrawIndexedInstanced(numTriangles, 1, 0, 0, 0);
 }
 
 // immediately update constant buffer data and retain pointer to CPU memory

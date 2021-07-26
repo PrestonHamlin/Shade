@@ -4,6 +4,8 @@
 #include "Viewport.h"
 #include "PipelineState.h"
 #include "Camera.h"
+#include "GeometryManager.h"
+
 
 class ShaderToyScene : public Scene
 {
@@ -26,8 +28,8 @@ private:
 
     // components
     Dx12RenderEngine*                   m_pEngine;
+    GeometryManager                     m_geometryManager;
     PipelineState                       m_pipelineState;
-    Mesh                                m_mesh;
     Camera                              m_camera;
     ViewportRenderTarget                m_viewportForRtv;
     ViewportDepthTexture                m_viewportForDepth;
@@ -40,4 +42,6 @@ private:
     DirectX::XMMATRIX                   m_viewMatrix;
     DirectX::XMMATRIX                   m_projectionMatrix;
     bool                                m_reverseDepth;
+
+    TransformData                       m_transformData;
 };

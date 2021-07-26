@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Dx12RenderEngine.h"
+#include "GeometryManager.h"
 #include "Shader.h"
 
 
@@ -30,9 +31,13 @@ public:
 
     // common usage
     void Init(PipelineCreateInfo createInfo);
-    void AddMesh(Mesh* pMesh);
     void Render();
     void Execute() {Dx12RenderEngine::pCurrentEngine->ExecuteCommandList(m_pCommandList.Get());}
+
+    // geometry and draws
+    void RegisterGeometryManager(GeometryManager* pGeometryManager) {m_pGeometryManager = pGeometryManager;}
+    void DrawAllGeometry();
+    void DrawStaticMesh(const Drawable& drawable);
 
     void SetConstantBufferData(CbvData data);
     void UpdateConstantBufferData();
@@ -58,6 +63,10 @@ private:
     static uint                         m_pipelineIdCounter;
     const uint                          m_pipelineId;
 
+    // Shade constructs
+    GeometryManager*                    m_pGeometryManager;
+    std::vector<Drawable>               m_drawList;
+
     // API constructs
     ComPtr<ID3D12CommandAllocator>      m_pCommandAllocator;
     ComPtr<ID3D12GraphicsCommandList>   m_pCommandList;
@@ -73,26 +82,11 @@ private:
     CD3DX12_VIEWPORT                    m_viewport;
     CD3DX12_RECT                        m_scissorRect;
 
-    // general use
-    ComPtr<ID3D12Resource>              m_pUploadBuffer;        // generic CPU->GPU uploads
-    uint                                m_uploadBufferOffset;   // offset to next free spot in upload buffer
-    UINT8*                              m_pUploadBufferBegin;   // start of mapped region
-    UINT8*                              m_pUploadBufferEnd;     // end of last added element
-
     // constant buffer
     ComPtr<ID3D12Resource>              m_pConstantBuffer;
     void*                               m_pConstantBufferData;
     uint                                m_constantBufferDataSize;
     UINT8*                              m_pConstandBufferDataDataBegin;
-
-    // geometry
-    std::vector<Mesh*>                  m_meshes;
-    ComPtr<ID3D12Resource>              m_pGeometryBuffer;      // committed resource for scene geometry data
-    uint                                m_geometryBufferOffset; // offset to next free spot
-    D3D12_VERTEX_BUFFER_VIEW            m_vertexBufferView;     // triangle vertices
-    D3D12_VERTEX_BUFFER_VIEW            m_colorBufferView;      // per-vertex colors
-    D3D12_VERTEX_BUFFER_VIEW            m_normalBufferView;     // per-vertex normals
-    D3D12_INDEX_BUFFER_VIEW             m_indexBufferView;      // triangle indices
 
     // depth
     ComPtr<ID3D12Resource>              m_pDepthStencil;        // R32 depth texture
