@@ -37,9 +37,10 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
     {
         CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
         ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-        CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-        rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC, D3D12_SHADER_VISIBILITY_ALL);
-        rootParameters[1].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
+        CD3DX12_ROOT_PARAMETER1 rootParameters[3];
+        rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC, D3D12_SHADER_VISIBILITY_ALL);  // global
+        rootParameters[1].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC, D3D12_SHADER_VISIBILITY_ALL);  // per-drawable
+        rootParameters[2].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
 
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -253,6 +254,7 @@ void PipelineState::DrawStaticMesh(const Drawable& drawable)
     m_pCommandList->IASetVertexBuffers(1, 1, &meshViews.colorBufferView);
     m_pCommandList->IASetIndexBuffer(&meshViews.indexBufferView);
     m_pCommandList->SetGraphicsRootConstantBufferView(0, m_pConstantBuffer->GetGPUVirtualAddress());
+    m_pCommandList->SetGraphicsRootConstantBufferView(1, m_pGeometryManager->GetConstantBufferOffset(drawable.meshID));
 
     const uint numTriangles = m_pGeometryManager->GetMesh(drawable.meshID)->GetNumFaces()*3;
     m_pCommandList->DrawIndexedInstanced(numTriangles, 1, 0, 0, 0);

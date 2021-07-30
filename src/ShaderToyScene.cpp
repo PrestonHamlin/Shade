@@ -4,9 +4,6 @@
 
 ShaderToyScene::ShaderToyScene(std::wstring name) :
     m_name(name),
-    m_modelMatrix(),
-    m_viewMatrix(),
-    m_projectionMatrix(),
     m_constantBufferData({})
 {
 }
@@ -18,7 +15,6 @@ void ShaderToyScene::Init(Dx12RenderEngine* pEngine)
 {
     m_pEngine = pEngine;
 
-    //m_mesh.LoadFromFile("./media/rotated_teapot.ply");
     m_geometryManager.Init();
     uint teapotID = m_geometryManager.AddMesh("./media/rotated_teapot.ply");
     uint cubeID = m_geometryManager.AddMesh("./media/colored_cube.ply");
@@ -75,25 +71,6 @@ void ShaderToyScene::BuildUI()
         ImGui::End();
     }
 
-    // mesh tranforms
-    {
-        ImGui::Begin("Model Transforms");
-        if (ImGui::DragFloat3("Scale", &m_transformData.scale.x, 1.0, -100, 100, "%.3f", ImGuiSliderFlags_Logarithmic))
-        {
-            m_transformData.matrixDirty = true;
-        }
-        if (ImGui::DragFloat3("Rotation", &m_transformData.rotation.x, 1.0, -1000, 1000, "%.3f", ImGuiSliderFlags_Logarithmic))
-        {
-            m_transformData.matrixDirty = true;
-        }
-        if (ImGui::DragFloat3("Translation", &m_transformData.translation.x, 1.0, -1000, 1000, "%.3f", ImGuiSliderFlags_Logarithmic))
-        {
-            m_transformData.matrixDirty = true;
-        }
-
-        ImGui::End();
-    }
-
     // clear-color picker
     {
         ImVec4 pickerColor(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
@@ -130,6 +107,9 @@ void ShaderToyScene::BuildUI()
         ImGui::End(); // file browser
     }
 
+    // geometry management
+    m_geometryManager.BuildUI();
+
     // viewports
     m_viewportForRtv.DrawUI();
     m_viewportForDepth.DrawUI();
@@ -139,19 +119,9 @@ void ShaderToyScene::OnUpdate()
 {
     m_camera.Update();
 
-    // model
-    // TODO: model coordinates
-    m_modelMatrix = m_transformData.GetTransformMatrix();
-
-    // view
-    m_viewMatrix = m_camera.GetViewMatrix();
-
-    // projection
-    m_projectionMatrix = m_camera.GetProjectionMatrix();
-
-    // update MVP matrix
-    XMMATRIX mvpMatrix = XMMatrixTranspose(m_modelMatrix * m_viewMatrix * m_projectionMatrix);
-    XMStoreFloat4x4(&m_constantBufferData.MVP, mvpMatrix);
+    // provide view and projection matrices to shader
+    XMStoreFloat4x4(&m_constantBufferData.viewMatrix, XMMatrixTranspose(m_camera.GetViewMatrix()));
+    XMStoreFloat4x4(&m_constantBufferData.projectionMatrix, XMMatrixTranspose(m_camera.GetProjectionMatrix()));
 }
 
 void ShaderToyScene::OnRender()

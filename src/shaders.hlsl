@@ -1,7 +1,11 @@
-cbuffer SceneConstantBuffer : register(b0)
+cbuffer SceneConstants : register(b0)
 {
-    float4 angles;
-    float4x4 MVP;
+    float4x4 ViewMatrix;
+    float4x4 ProjectionMatrix;
+};
+cbuffer MeshConstants : register(b1)
+{
+    float4x4 ModelMatrix;
 };
 
 struct PSInput
@@ -15,6 +19,7 @@ PSInput VSMain(float4 position : POSITION, float4 color : COLOR)
     PSInput result;
 
     // model/view/projection matrix
+    float4x4 MVP = mul(mul(ModelMatrix, ViewMatrix), ProjectionMatrix);
     result.position = mul(position, MVP);
 
     // passthrough per-vertex color for interpolation

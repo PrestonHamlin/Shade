@@ -22,16 +22,26 @@ static const char* DrawableTypeStrings[]
     "Unknown"
 };
 
+struct alignas(256) MeshConstants
+{
+    XMFLOAT4X4 modelMatrix;             // transform in world-space
+};
+struct alignas(256) GlobalConstants
+{
+    XMFLOAT4X4 viewMatrix;              // camera view
+    XMFLOAT4X4 projectionMatrix;        // perspective projection
+};
+
 // contains per-drawable (per-instance) data
 struct Drawable
 {
-    bool            shouldDraw;     // should this item be drawn?
-    TransformData   transformData;  // first level of model/world transformation
-    DrawableType    drawableType;   // is this a static mesh? point cloud? product of a mesh shader?
-    uint            drawableID;     // unique identifer among all drawables
+    bool            shouldDraw;         // should this item be drawn?
+    TransformData   transformData;      // first level of model/world transformation
+    DrawableType    drawableType;       // is this a static mesh? point cloud? product of a mesh shader?
+    uint            drawableID;         // unique identifer among all drawables
     union
     {
-        uint        meshID;         // only support static meshes for now
+        uint        meshID;             // only support static meshes for now
     };
 };
 
@@ -55,6 +65,7 @@ public:
     ~GeometryManager();
 
     void Init();
+    void BuildUI();
 
     uint AddMesh(std::string filename, bool addDrawable=true);
 
@@ -63,8 +74,10 @@ public:
     Drawable GetDrawable(uint index)                        {return m_drawables[index];}
     std::vector<Mesh>* GetMeshes()                          {return &m_Meshes;}
     Mesh* GetMesh(uint index)                               {return &m_Meshes[index];}
-    std::vector<MeshBufferViews>* GetMeshBufferViews()      {return &m_MeshBufferViews;}
-    MeshBufferViews GetMeshBufferView(uint index)           {return m_MeshBufferViews[index];}
+    std::vector<MeshBufferViews>* GetMeshBufferViews()      {return &m_meshBufferViews;}
+    MeshBufferViews GetMeshBufferView(uint index)           {return m_meshBufferViews[index];}
+    ID3D12Resource* GetConstantBufferResource()             {return m_pConstantBuffer.Get();}
+    uint64 GetConstantBufferOffset(uint index)              {return m_pConstantBuffer->GetGPUVirtualAddress() + 256*index;}
 
 protected:
     uint AddDrawable(Drawable drawable);
@@ -79,6 +92,11 @@ protected:
     std::vector<Drawable>               m_drawables;            // per-instance geometry data
     std::vector<Mesh>                   m_Meshes;               // CPU-side mesh representations
 
+    // constant buffer for per-mesh data
+    ComPtr<ID3D12Resource>              m_pConstantBuffer;
+    UINT8*                              m_pConstantBufferDataDataBegin;
+    MeshConstants                       m_meshConstants[64];
+
     // upload buffer for shipping geometry data to GPU
     ComPtr<ID3D12Resource>              m_pUploadBuffer;        // generic CPU->GPU uploads
     uint                                m_uploadBufferOffset;   // offset to next free spot in upload buffer
@@ -88,5 +106,5 @@ protected:
     // GPU memory management and views to feed to pipelines
     ComPtr<ID3D12Resource>              m_pGeometryBuffer;      // committed resource for scene geometry data
     uint                                m_geometryBufferOffset; // offset to next free spot
-    std::vector<MeshBufferViews>        m_MeshBufferViews;      // buffer locations and offsets for per-vertex data
+    std::vector<MeshBufferViews>        m_meshBufferViews;      // buffer locations and offsets for per-vertex data
 };

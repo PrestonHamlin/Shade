@@ -16,5 +16,12 @@ struct TransformData
     bool              matrixDirty;
 
     TransformData();
+    void UpdateTransformMatrix();
     DirectX::XMMATRIX GetTransformMatrix();
+    DirectX::XMMATRIX GetTransformMatrixT();
+    void GetTransformMatrix(void* pDest);
+    void GetTransformMatrixT(void* pDest);
+    void StoreTransformMatrix(void* pDest);
+    void StoreTransformMatrixT(void* pDest);
+
 };

@@ -23,6 +23,20 @@ void GeometryManager::Init()
     Dx12RenderEngine* pEngine = Dx12RenderEngine::pCurrentEngine;
     auto* pDevice = pEngine->GetDevice();
 
+    // constant buffer for per-mesh per-frame data
+    {
+        CheckResult(pDevice->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(256 * 64),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&m_pConstantBuffer)));
+
+        CD3DX12_RANGE readRange(0, 0);
+        CheckResult(m_pConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pConstantBufferDataDataBegin)));
+    }
+
     // upload heap (committed resource) for generic usage
     {
         constexpr uint uploadBufferSize = 32*1024*1024;
@@ -59,6 +73,40 @@ void GeometryManager::Init()
     }
 }
 
+void GeometryManager::BuildUI()
+{
+    ImGui::Begin("Geometry Manager");
+    ImGui::Text("Meshes: %d", m_Meshes.size());
+
+    // direct access is useful for ImGui, and we don't need accessor functions if the geometry manager draws itself
+    for (Drawable& drawable : m_drawables) // TODO: re-batch
+    {
+        bool dirty = false;
+        ImGui::PushID(drawable.meshID);
+        ImGui::Separator();
+        if (ImGui::DragFloat3("Scale", &drawable.transformData.scale.x, 1.0, -100, 100, "%.3f", ImGuiSliderFlags_Logarithmic))
+        {
+            dirty = true;
+        }
+        if (ImGui::DragFloat3("Rotation", &drawable.transformData.rotation.x, 1.0, -1000, 1000, "%.3f", ImGuiSliderFlags_Logarithmic))
+        {
+            dirty = true;
+        }
+        if (ImGui::DragFloat3("Translation", &drawable.transformData.translation.x, 1.0, -1000, 1000, "%.3f", ImGuiSliderFlags_Logarithmic))
+        {
+            dirty = true;
+        }
+        if (dirty)
+        {
+            drawable.transformData.matrixDirty = true;
+            drawable.transformData.StoreTransformMatrixT(PointerByteIncrement(m_pConstantBufferDataDataBegin, 256*drawable.meshID));
+        }
+        ImGui::PopID();
+    }
+    ImGui::End();
+}
+
+
 uint GeometryManager::AddMesh(string filename, bool addDrawable)
 {
     Mesh& newMesh = m_Meshes.emplace_back(filename);
@@ -66,7 +114,7 @@ uint GeometryManager::AddMesh(string filename, bool addDrawable)
 
     // we should only upload each mesh once unless there is an explicit AddMesh call for the same file
     uint meshCount = m_Meshes.size();
-    uint meshUploadCount = m_MeshBufferViews.size();
+    uint meshUploadCount = m_meshBufferViews.size();
     assert(meshCount == meshUploadCount);
 
     if (addDrawable)
@@ -78,6 +126,9 @@ uint GeometryManager::AddMesh(string filename, bool addDrawable)
         drawable.meshID         = m_meshCounter++;
         drawable.transformData  = TransformData();
         AddDrawable(drawable);
+
+        drawable.transformData.StoreTransformMatrix(&m_meshConstants[meshCount].modelMatrix);
+        drawable.transformData.StoreTransformMatrixT(PointerByteIncrement(m_pConstantBufferDataDataBegin, 256*drawable.meshID));
     }
 
     return meshCount;
@@ -91,7 +142,7 @@ uint GeometryManager::AddDrawable(Drawable drawable)
 
 MeshBufferLayout GeometryManager::RegisterAndUploadMesh(Mesh& newMesh)
 {
-    MeshBufferLayout layout = newMesh.PopulateGeometryBuffer((void*)m_pUploadBufferBegin);
+    MeshBufferLayout layout = newMesh.PopulateGeometryBuffer((void*)m_pUploadBufferEnd);
 
     MeshBufferViews newMeshViews = {};
     auto baseOffset = m_pUploadBuffer->GetGPUVirtualAddress() + m_uploadBufferOffset;
@@ -106,7 +157,7 @@ MeshBufferLayout GeometryManager::RegisterAndUploadMesh(Mesh& newMesh)
     newMeshViews.indexBufferView.SizeInBytes  = layout.facesSize;
 
     newMeshViews.vertexBufferView.StrideInBytes = sizeof(aiVector3D);
-    newMeshViews.colorBufferView.StrideInBytes  =  sizeof(aiColor4D);
+    newMeshViews.colorBufferView.StrideInBytes  = sizeof(aiColor4D);
     newMeshViews.normalBufferView.StrideInBytes = sizeof(aiVector3D);
     newMeshViews.indexBufferView.Format         = DXGI_FORMAT_R32_UINT;
 
@@ -123,7 +174,7 @@ MeshBufferLayout GeometryManager::RegisterAndUploadMesh(Mesh& newMesh)
 
     m_pUploadBufferEnd += layout.totalSize;
     m_uploadBufferOffset += layout.totalSize;
-    m_MeshBufferViews.push_back(newMeshViews);
+    m_meshBufferViews.push_back(newMeshViews);
 
     return layout;
 }

@@ -22,8 +22,8 @@ public:
 private:
     struct SceneConstantBuffer
     {
-        XMFLOAT4 angles;
-        XMFLOAT4X4 MVP;
+        XMFLOAT4X4 viewMatrix;
+        XMFLOAT4X4 projectionMatrix;
     };
 
     // components
@@ -38,10 +38,5 @@ private:
     std::wstring                        m_name;
     float                               m_clearColor[4] = {0.0f, 0.2f, 0.4f, 1.0f};
     SceneConstantBuffer                 m_constantBufferData;
-    DirectX::XMMATRIX                   m_modelMatrix;
-    DirectX::XMMATRIX                   m_viewMatrix;
-    DirectX::XMMATRIX                   m_projectionMatrix;
     bool                                m_reverseDepth;
-
-    TransformData                       m_transformData;
 };

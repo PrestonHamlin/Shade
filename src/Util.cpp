@@ -75,3 +75,12 @@ void CheckResult(HRESULT hr, const std::wstring& msg)
 {
     CheckResult(hr, ToNormalString(msg));
 }
+
+
+//**********************************************************************************************************************
+//                                                      Math
+//**********************************************************************************************************************
+void* PointerByteIncrement(void* ptr, uint bytes)
+{
+    return (void*)((char*)ptr + bytes);
+}

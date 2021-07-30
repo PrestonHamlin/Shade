@@ -94,3 +94,9 @@ void SetDebugName(ObjectType* pObject, std::string name)
 {
     pObject->SetPrivateData(WKPDID_D3DDebugObjectName, name.size(), name.c_str());
 }
+
+
+//**********************************************************************************************************************
+//                                                      Math
+//**********************************************************************************************************************
+void* PointerByteIncrement(void* ptr, uint bytes);
