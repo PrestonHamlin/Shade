@@ -2,15 +2,9 @@
 
 #include "Shade.h"
 
-//#include <d3dcompiler.h>
 #include <dxcapi.h>
-#include <DxilConstants.h>
-
-#include "Util.h"
 #include "Dx12RenderEngine.h"
-
-
-using ShaderKind = hlsl::DXIL::ShaderKind;
+#include "Util.h"
 
 
 class Shader

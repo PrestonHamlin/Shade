@@ -18,6 +18,7 @@ build/*
 .vscode/
 Shade.args.json
 imgui.ini
+extern/dxc/*
 
 # CMake from https://github.com/github/gitignore/blob/master/CMake.gitignore
 CMakeLists.txt.user
