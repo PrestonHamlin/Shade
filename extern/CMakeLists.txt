@@ -9,10 +9,8 @@ add_subdirectory(assimp)
 set_target_properties(assimp PROPERTIES FOLDER "Libraries")
 set_target_properties(zlibstatic PROPERTIES FOLDER "Libraries")
 set_target_properties(UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTIES FOLDER "Libraries")
-include_directories(assimp/include)
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/extern/assimp/include)
 
 # FMT is the precursor to std::format in C++20
 add_subdirectory(fmt)
 set_target_properties(fmt PROPERTIES FOLDER "Libraries")
-include_directories(fmt/include)
+
