@@ -34,7 +34,7 @@ const std::string HumanReadableFileSize(uint fileSize)
     uint scale = 0;
     double value = fileSize;
     std::stringstream ss;
-    constexpr char* units[] = {"  B", "KiB", "MiB", "GiB", "TiB", "PiB"};
+    const char* units[] = {"  B", "KiB", "MiB", "GiB", "TiB", "PiB"};
 
     //do
     //while(value >= 1024)

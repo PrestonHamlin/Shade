@@ -25,29 +25,27 @@ public:
 
     // primary interfaces for render loop
     void Init(const HWND window);   // initialize API and other state
-    void OnUpdate();                // process inputs (physics, user, network, etc...)
-    void PreRender();               // do some work at dawn of new frame
-    void OnRender();                // issue Present()
-    void PostRender();              // work and clenup after frame presented
+    void OnRender();
     void Flush();
     void OnDestroy();
 
     // other controls
-    void BuildEngineUi();
-    void OnResize(RECT* pRect);
-    void ToggleFullscreen();
+    void OnReposition(const WINDOWPOS* pWindowPos);
     void OnKeyDown(UINT8 key);
+    bool OnHitTest(uint x, uint y, uint* pHitResult);
 
     // API access provided to clients
     HRESULT CreateCommandQueue(ID3D12CommandQueue**                     ppCommandQueue);
     HRESULT CreateCommandAllocator(ID3D12CommandAllocator**             ppCommandAllocator);
-    HRESULT CreateCommandList(ID3D12GraphicsCommandList**               ppCommandList);
+    HRESULT CreateCommandList(ID3D12GraphicsCommandList6**              ppCommandList);
     HRESULT CreateRootSignature(CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC*  pDesc,
                                 ID3D12RootSignature**                   ppRootSignature);
     HRESULT CreatePipelineState(D3D12_GRAPHICS_PIPELINE_STATE_DESC*     pDesc,
                                 ID3D12PipelineState**                   ppPipelineState);
+    HRESULT CreatePipelineState(D3D12_PIPELINE_STATE_STREAM_DESC* pStreamDesc,
+                                ID3D12PipelineState** ppPipelineState);
     HRESULT CreateResource(ID3D12Resource** ppResource);
-    void ExecuteCommandList(ID3D12GraphicsCommandList*                  pCommandList);
+    void ExecuteCommandList(ID3D12GraphicsCommandList6*                 pCommandList);
 
     // utility functions provided to clients
     const uint UploadGeometryData(Mesh* pMesh);
@@ -72,18 +70,23 @@ private:
 
 
     // internal helpers
+    void OnUpdate();                // process inputs (physics, user, network, etc...)
+    void PreRender();               // do some work at dawn of new frame
+    void Render();                  // issue work and Present()
+    void PostRender();              // work and clenup after frame presented
+    void BuildEngineUi();
     void PopulateCommandList();
-    void ResizeSwapchain(uint width, uint height);
+    void ResizeSwapchain();
     void SetDebugData();
 
 
     // API constructs and interfaces
     ComPtr<IDXGIFactory4>               m_pFactory;
-    ComPtr<IDXGIAdapter1>               m_pAdapter;
+    ComPtr<IDXGIAdapter4>               m_pAdapter;
     ComPtr<ID3D12Device8>               m_pDevice;
     ComPtr<ID3D12CommandQueue>          m_pCommandQueue;
     ComPtr<ID3D12CommandAllocator>      m_pCommandAllocator;
-    ComPtr<ID3D12GraphicsCommandList>   m_pCommandList;
+    ComPtr<ID3D12GraphicsCommandList6>  m_pCommandList;
 
     // rendering resources
     ComPtr<IDXGISwapChain3>             m_pSwapChain;
@@ -102,6 +105,9 @@ private:
     float                               m_clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
     // synchronization objects
+    std::mutex                          m_swapchainMutex;
+    bool                                m_swapchainNeedsResize;
+    bool                                m_frameIsReady;
     UINT                                m_frameIndex;
     HANDLE                              m_pFenceEvent;
     ComPtr<ID3D12Fence>                 m_pFence;
@@ -110,6 +116,8 @@ private:
     // UI
     ImGuiContext*                       m_pImGuiContext;
     RECT                                m_windowPosition;
+    RECT                                m_dwmFrameBounds;
+    WINDOWPOS                           m_newWindowPosition;
     bool                                m_fullscreen;
     bool                                m_showDebugConsole;     // top-level logs and console
     bool                                m_showImGuiDemoWindow;  // demo is primary documentation for ImGui

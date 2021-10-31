@@ -80,10 +80,12 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
 
         // constant buffer for per-frame data
         {
+            const auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+            const auto bufferProps = CD3DX12_RESOURCE_DESC::Buffer(1024 * 64);
             CheckResult(pDevice->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                &heapProps,
                 D3D12_HEAP_FLAG_NONE,
-                &CD3DX12_RESOURCE_DESC::Buffer(1024 * 64),
+                &bufferProps,
                 D3D12_RESOURCE_STATE_GENERIC_READ,
                 nullptr,
                 IID_PPV_ARGS(&m_pConstantBuffer)));
@@ -104,13 +106,14 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
             desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 
             // create resource for render target
+            const auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
             CheckResult(pDevice->CreateCommittedResource(
-                        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-                        D3D12_HEAP_FLAG_NONE,
-                        &desc,
-                        D3D12_RESOURCE_STATE_RENDER_TARGET,
-                        nullptr,
-                        IID_PPV_ARGS(&m_pRenderTarget)));
+                &heapProps,
+                D3D12_HEAP_FLAG_NONE,
+                &desc,
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                nullptr,
+                IID_PPV_ARGS(&m_pRenderTarget)));
 
             // create render target view
             CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart());
@@ -124,12 +127,15 @@ void PipelineState::Init(PipelineCreateInfo createInfo)
             depthStencilDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
             depthStencilDesc.Flags = D3D12_DSV_FLAG_NONE;
 
+            const auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+            const auto texProps = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_TYPELESS, 800, 800, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+            const auto clearProps = CD3DX12_CLEAR_VALUE(DXGI_FORMAT_D32_FLOAT, 0.0f, 0);
             CheckResult(pDevice->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+                &heapProps,
                 D3D12_HEAP_FLAG_NONE,
-                &CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_TYPELESS, 800, 800, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL),
+                &texProps,
                 D3D12_RESOURCE_STATE_DEPTH_WRITE,
-                &CD3DX12_CLEAR_VALUE(DXGI_FORMAT_D32_FLOAT, 0.0f, 0),
+                &clearProps,
                 IID_PPV_ARGS(&m_pDepthStencil)
                 ));
 
@@ -220,7 +226,6 @@ void PipelineState::Render()
 
 void PipelineState::DrawAllGeometry()
 {
-    DrawableType type;
     const auto begin = m_pGeometryManager->GetDrawables()->begin();
     const auto end = m_pGeometryManager->GetDrawables()->end();
 

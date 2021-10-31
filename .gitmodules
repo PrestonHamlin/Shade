@@ -7,3 +7,9 @@
 [submodule "extern/imgui"]
 	path = extern/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "extern/magic_enum"]
+	path = extern/magic_enum
+	url = https://github.com/Neargye/magic_enum.git
+[submodule "extern/imnodes"]
+	path = extern/imnodes
+	url = https://github.com/Nelarius/imnodes.git

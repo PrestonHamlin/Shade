@@ -22,9 +22,10 @@
 
 #include <fmt/format.h>
 
+#include "d3dx12.h"
+#include "Common.h"
+
 using Microsoft::WRL::ComPtr;
-using uint      = uint32_t;
-using uint64    = uint64_t;
 
 //enum class MessageSeverity
 enum MessageSeverity

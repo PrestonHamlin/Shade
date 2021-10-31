@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Common.h"
 #include "Shade.h"
 
 #include "Util.h"
@@ -11,6 +12,7 @@ public:
     RenderEngine(UINT width, UINT height, std::wstring name);
     virtual ~RenderEngine();
 
+    // primary interfaces for render loop
     virtual void Init(const HWND window) = 0;
     virtual void OnUpdate() = 0;
     virtual void PreRender() = 0;
@@ -19,9 +21,10 @@ public:
     virtual void Flush() = 0;
     virtual void OnDestroy() = 0;
 
+    // other controls
+    //virtual void OnResize(uint width, uint height, MessageSizeType type) = 0;
     virtual void OnKeyDown(UINT8 key)   {}
     virtual void OnKeyUp(UINT8 key)     {}
-    virtual void OnResize(RECT* pRect) = 0;
 
     uint GetWidth() const               {return m_width;}
     uint GetHeight() const              {return m_height;}

@@ -23,3 +23,17 @@ set(IMGUI_HEADERS
 source_group("ImGui" FILES ${IMGUI_SOURCES} ${IMGUI_HEADERS})
 
 include_directories(${IMGUI_SOURCE_DIRS})
+
+
+# ImNodes is an ImGui-based node editor
+set(IMNODES_SOURCE_PATH ${PROJECT_SOURCE_DIR}/extern/ImNodes)
+
+set(IMNODES_SOURCES
+    ${IMNODES_SOURCE_PATH}/imnodes.cpp
+)
+set(IMNODES_HEADERS
+    ${IMNODES_SOURCE_PATH}/imnodes.h
+)
+source_group("imnodes" FILES ${IMNODES_SOURCES} ${IMNODES_HEADERS})
+
+include_directories(${IMNODES_SOURCE_PATH})

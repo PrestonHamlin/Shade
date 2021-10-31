@@ -10,8 +10,8 @@ using namespace DirectX;
 class Camera
 {
 public:
-    Camera::Camera();
-    Camera::~Camera();
+    Camera();
+    ~Camera();
 
     void Update();
 

@@ -42,6 +42,9 @@ include(cmake/ImGui.cmake)
 # configure the DirectX Shader Compiler (DXC)
 include(cmake/DirectXShaderCompiler.cmake)
 
+# configure Magic Enum
+include(cmake/MagicEnum.cmake)
+
 # loose headers
 set(EXTRA_HEADERS src/d3dx12.h)
 
@@ -49,8 +52,11 @@ set(EXTRA_HEADERS src/d3dx12.h)
 #===============================================================================
 #                                   Shade
 #===============================================================================
+include_directories(src)
+
 set(SHADE_SOURCES
     src/Camera.cpp
+    src/Common.cpp
     src/Dx12RenderEngine.cpp
     src/GeometryManager.cpp
     src/Mesh.cpp
@@ -67,6 +73,7 @@ set(SHADE_SOURCES
 )
 set(SHADE_HEADERS
     src/Camera.h
+    src/Common.h
     src/Dx12RenderEngine.h
     src/GeometryManager.h
     src/Mesh.h
@@ -88,8 +95,8 @@ source_group("Shaders" FILES ${SHADE_SHADERS})
 set_source_files_properties(${SHADE_SHADERS} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 # group Shade dependencies
-set(ALL_SOURCES ${SHADE_SOURCES} ${IMGUI_SOURCES})
-set(ALL_HEADERS ${SHADE_HEADERS} ${IMGUI_HEADERS} ${EXTRA_HEADERS})
+set(ALL_SOURCES ${SHADE_SOURCES} ${IMGUI_SOURCES} ${IMNODES_SOURCES})
+set(ALL_HEADERS ${SHADE_HEADERS} ${IMGUI_HEADERS} ${IMNODES_HEADERS} ${EXTRA_HEADERS})
 
 # add primary executable and set it's language version
 message("ALL_SOURCES: ${ALL_SOURCES}")
@@ -124,7 +131,7 @@ message("ASSIMP: ${ASSIMP_LIBRARY_OUTPUT_DIRECTORY}")
 message("DXC: ${DXC_BINARY_DIR}")
 add_custom_command(TARGET Shade POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${ASSIMP_LIBRARY_OUTPUT_DIRECTORY}/$<CONFIG>/assimp-vc142-mtd.dll
+        ${ASSIMP_LIBRARY_OUTPUT_DIRECTORY}/$<CONFIG>/assimp-vc142-mt$<$<CONFIG:Debug>:d>.dll
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>
 )
 add_custom_command(TARGET Shade POST_BUILD

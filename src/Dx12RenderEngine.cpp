@@ -7,6 +7,7 @@
 #include "ShaderToyScene.h"
 #include "Widgets.h"
 
+
 using namespace std;
 
 
@@ -14,7 +15,7 @@ Dx12RenderEngine* Dx12RenderEngine::pCurrentEngine = nullptr;
 
 
 //**********************************************************************************************************************
-//                                              Engine Primary Interfaces
+//                                              Constructors & Destructors
 //**********************************************************************************************************************
 Dx12RenderEngine::Dx12RenderEngine(UINT width, UINT height) :
     RenderEngine(width, height, L"DX12 Render Engine"),
@@ -33,11 +34,17 @@ Dx12RenderEngine::Dx12RenderEngine(UINT width, UINT height) :
     m_showDebugConsole(false),
     m_showImGuiDemoWindow(false),
     m_showImGuiMetrics(false),
-    m_showImGuiStyleEditor(false)
+    m_showImGuiStyleEditor(false),
+    m_frameIsReady(false),
+    m_swapchainNeedsResize(false)
 {
     pCurrentEngine = this;
 }
 
+
+//**********************************************************************************************************************
+//                                              Engine Primary Interfaces
+//**********************************************************************************************************************
 void Dx12RenderEngine::Init(const HWND window)
 {
     m_window = window;
@@ -64,17 +71,20 @@ void Dx12RenderEngine::Init(const HWND window)
 
         // select adapter and create device
         CheckResult(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
+        ComPtr<IDXGIAdapter1> pAdapter;
         if (m_useWarpDevice)
         {
-            CheckResult(m_pFactory->EnumWarpAdapter(IID_PPV_ARGS(&m_pAdapter)));
+            //CheckResult(m_pFactory->EnumWarpAdapter(IID_PPV_ARGS(&m_pAdapter)));
+            CheckResult(m_pFactory->EnumWarpAdapter(IID_PPV_ARGS(&pAdapter)));
         }
         else
         {
-            // try each adapter the runtime presents us with untii we fine one we like
-            for (UINT adapterIndex = 0; m_pFactory->EnumAdapters1(adapterIndex, &m_pAdapter) != DXGI_ERROR_NOT_FOUND; ++adapterIndex)
+            // try each adapter the runtime presents us with until we fine one we like
+            for (UINT adapterIndex = 0; m_pFactory->EnumAdapters1(adapterIndex, &pAdapter) != DXGI_ERROR_NOT_FOUND; ++adapterIndex)
             {
                 DXGI_ADAPTER_DESC1 desc;
-                m_pAdapter->GetDesc1(&desc);
+                //m_pAdapter->GetDesc1(&desc);
+                pAdapter->GetDesc1(&desc);
                 PrintMessage("Examining device: {}\n", ToNormalString(desc.Description));
 
                 if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) // ignore software adapters
@@ -83,12 +93,13 @@ void Dx12RenderEngine::Init(const HWND window)
                 }
 
                 // test the adapter without actually creating a device
-                if (SUCCEEDED(D3D12CreateDevice(m_pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr)))
+                if (SUCCEEDED(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr)))
                 {
                     break;
                 }
             }
         }
+        pAdapter.As(&m_pAdapter);
         CheckResult(D3D12CreateDevice(m_pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
     }
 
@@ -123,10 +134,12 @@ void Dx12RenderEngine::Init(const HWND window)
         // upload heap (committed resource) for generic usage
         {
             constexpr uint uploadBufferSize = 8*1024*1024;
+            const auto uploadProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+            const auto bufferProps = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
             CheckResult(m_pDevice->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                &uploadProps,
                 D3D12_HEAP_FLAG_NONE,
-                &CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize),
+                &bufferProps,
                 D3D12_RESOURCE_STATE_GENERIC_READ,
                 nullptr,
                 IID_PPV_ARGS(&m_pUploadBuffer)));
@@ -135,10 +148,12 @@ void Dx12RenderEngine::Init(const HWND window)
         // default heap (committed resource) for geometry data
         {
             constexpr uint geometryBufferSize = 8*1024*1024;
+            const auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+            const auto bufferProps = CD3DX12_RESOURCE_DESC::Buffer(geometryBufferSize);
             CheckResult(m_pDevice->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+                &heapProps,
                 D3D12_HEAP_FLAG_NONE,
-                &CD3DX12_RESOURCE_DESC::Buffer(geometryBufferSize),
+                &bufferProps,
                 D3D12_RESOURCE_STATE_GENERIC_READ,
                 nullptr,
                 IID_PPV_ARGS(&m_pGeometryBuffer)));
@@ -259,59 +274,21 @@ void Dx12RenderEngine::Init(const HWND window)
     }
 }
 
-void Dx12RenderEngine::OnUpdate()
-{
-    m_pScene->OnUpdate();
-
-    // TODO: update internal state
-}
-
-void Dx12RenderEngine::PreRender()
-{
-    // TODO: perform pre-render work for new frame
-}
-
 void Dx12RenderEngine::OnRender()
 {
-    // Inform ImGui backends and core that we are starting a new frame, and construct the immediate-mode UI. The UI
-    //  will be drawn later via insertions into command list.
-    ImGui_ImplDX12_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
+    // TODO: semaphore for frame buffering
+    m_swapchainMutex.lock();
+    bool shouldRender = !m_frameIsReady;
+    m_swapchainMutex.unlock();
 
-    // reset so that scene can make requests
-    CheckResult(m_pCommandAllocator->Reset());
-    CheckResult(m_pCommandList->Reset(m_pCommandAllocator.Get(), nullptr));
-
-    // execute scene pipelines
-    m_pScene->OnRender();
-
-    // build dockspace with main menu bar, then populate with engine and scene contents
-    BuildEngineUi();
-    m_pScene->BuildUI();
-    ImGui::Render();
-
-    // after UI is described, update the floating windows and re-draw their viewports
-    ImGui::UpdatePlatformWindows();
-    ImGui::RenderPlatformWindowsDefault(NULL, (void*)m_pCommandList.Get());
-
-    // collect ImGui commands and execute them, drawing the UI
-    PopulateCommandList();
-    ID3D12CommandList* ppCommandLists[] = { m_pCommandList.Get() };
-    m_pCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
-
-    // present the frame we just generated and wait for all remaining work to complete
-    CheckResult(m_pSwapChain->Present(1, 0));   // sync to next vertical blank
-    //CheckResult(m_pSwapChain->Present(0, 0));   // present immediately (no vsync)
-    Flush();
-
-    // progress to next frame in swapchain
-    m_frameIndex = m_pSwapChain->GetCurrentBackBufferIndex();
-}
-
-void Dx12RenderEngine::PostRender()
-{
-    // TODO: perform post-render work for new frame
+    //if (shouldRender)
+    {
+        OnUpdate();
+        PreRender();
+        Render();
+        PostRender();
+        m_frameIsReady = true;
+    }
 }
 
 void Dx12RenderEngine::OnDestroy()
@@ -349,6 +326,291 @@ void Dx12RenderEngine::Flush()
 //**********************************************************************************************************************
 //                                                  Other Controls
 //**********************************************************************************************************************
+void Dx12RenderEngine::OnReposition(const WINDOWPOS* pWindowPos)
+{
+    // update stored window position
+    RECT newWindowRect = {};
+    GetWindowRect(m_window, &newWindowRect);
+    DwmGetWindowAttribute(m_window, DWMWA_EXTENDED_FRAME_BOUNDS, &m_dwmFrameBounds, sizeof(m_dwmFrameBounds));
+    PrintMessage("\tCurrent:  {}x{}\n", m_windowPosition.right - m_windowPosition.left, m_windowPosition.bottom - m_windowPosition.top);
+    PrintMessage("\tNew Rect: {}x{}\n", newWindowRect.right - newWindowRect.left, newWindowRect.bottom - newWindowRect.top);
+    PrintMessage("\tArg Pos:  {}x{}\n", pWindowPos->cx, pWindowPos->cy);
+    PrintMessage("\tDWM Rect: {}x{}\n", m_dwmFrameBounds.right - m_dwmFrameBounds.left, m_dwmFrameBounds.bottom - m_dwmFrameBounds.top);
+
+    // TODO: re-reposition if window way out of bounds
+
+    // resize if different dimensions
+    if (pWindowPos->cx != m_width || pWindowPos->cy != m_height)
+    {
+        m_swapchainMutex.lock();
+        m_newWindowPosition = *pWindowPos;
+        m_swapchainNeedsResize = true;
+        m_swapchainMutex.unlock();
+    }
+}
+
+void Dx12RenderEngine::OnKeyDown(UINT8 key)
+{
+    // TODO: flesh out
+    switch (key)
+    {
+    default:
+    {
+    }
+    }
+}
+
+bool Dx12RenderEngine::OnHitTest(uint x, uint y, uint* pHitResult)
+{
+    uint result     = HTNOWHERE;
+    uint topDiff    = y - m_windowPosition.top;
+    uint leftDiff   = x - m_windowPosition.left;
+    uint bottomDiff = m_windowPosition.bottom - y;
+    uint rightDiff  = m_windowPosition.right - x;
+
+    //PrintMessage("Hit test - {}x{} - {},{},{},{}\n", x, y, topDiff, leftDiff, bottomDiff, rightDiff);
+    bool topEdge    = topDiff == 0;
+    bool leftEdge   = leftDiff == 0;
+    bool bottomEdge = bottomDiff == 1;
+    bool rightEdge  = rightDiff == 1;
+
+    // edges for resizing
+    if      (topEdge && leftEdge)       result = HTTOPLEFT;
+    else if (topEdge && rightEdge)      result = HTTOPRIGHT;
+    else if (bottomEdge && leftEdge)    result = HTBOTTOMLEFT;
+    else if (bottomEdge && rightEdge)   result = HTBOTTOMRIGHT;
+    else if (topEdge)                   result = HTTOP;
+    else if (bottomEdge)                result = HTBOTTOM;
+    else if (leftEdge)                  result = HTLEFT;
+    else if (rightEdge)                 result = HTRIGHT;
+
+    // return false so ImGui will get the expected results from default handler
+    *pHitResult = result;
+    //return false;
+    return (result != HTNOWHERE);
+}
+
+
+//**********************************************************************************************************************
+//                                              Mediated API Access
+//**********************************************************************************************************************
+HRESULT Dx12RenderEngine::CreateCommandQueue(ID3D12CommandQueue** ppCommandQueue)
+{
+    HRESULT result = S_OK;
+
+    D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+    queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    result = m_pDevice->CreateCommandQueue(&queueDesc,
+                                           __uuidof(ID3D12CommandQueue),
+                                           (void**)ppCommandQueue);
+
+    CheckResult(result, "command allocator creation");
+    return result;
+}
+
+HRESULT Dx12RenderEngine::CreateCommandAllocator(ID3D12CommandAllocator** ppCommandAllocator)
+{
+    HRESULT result = S_OK;
+    result = m_pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                               __uuidof(ID3D12CommandAllocator),
+                                               (void**)ppCommandAllocator);
+
+    CheckResult(result, "command allocator creation");
+    return result;
+}
+
+HRESULT Dx12RenderEngine::CreateCommandList(ID3D12GraphicsCommandList6** ppCommandList)
+{
+    HRESULT result = S_OK;
+
+    // Old interface created in opened state. The newer one is cleaner since it creates in closed state and does not
+    //  require preexisting PSO and allocator, allowing for flexibility in setup.
+    result = m_pDevice->CreateCommandList1(0,
+                                           D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                           D3D12_COMMAND_LIST_FLAG_NONE,
+                                           __uuidof(ID3D12GraphicsCommandList),
+                                           (void**)(ppCommandList));
+
+    CheckResult(result, "command list creation");
+    return result;
+}
+
+HRESULT Dx12RenderEngine::CreateRootSignature(CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC* pDesc, ID3D12RootSignature** ppRootSignature)
+{
+    ComPtr<ID3DBlob> pSignature;
+    ComPtr<ID3DBlob> pError;
+    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+    HRESULT result = S_OK;
+
+    featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+    if (FAILED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+    {
+        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+    }
+
+    result = D3DX12SerializeVersionedRootSignature(pDesc, featureData.HighestVersion, &pSignature, &pError);
+    if (SUCCEEDED(result))
+    {
+        result = m_pDevice->CreateRootSignature(0, pSignature->GetBufferPointer(), pSignature->GetBufferSize(), IID_PPV_ARGS(ppRootSignature));
+        if (FAILED(result))
+        {
+            PrintMessage(Error, "Root signature creation failed!\n");
+        }
+    }
+    else
+    {
+        PrintMessage(Error, "Root signature serialization failed:\n{}", (char*)pError->GetBufferPointer());
+    }
+
+    return result;
+}
+
+HRESULT Dx12RenderEngine::CreatePipelineState(D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc,
+                                              ID3D12PipelineState**               ppPipelineState)
+{
+    HRESULT result = m_pDevice->CreateGraphicsPipelineState(pDesc, IID_PPV_ARGS(ppPipelineState));
+    CheckResult(result, "PSO creation from state description");
+
+    return result;
+}
+
+HRESULT Dx12RenderEngine::CreatePipelineState(D3D12_PIPELINE_STATE_STREAM_DESC* pStreamDesc,
+                                              ID3D12PipelineState**             ppPipelineState)
+{
+    HRESULT result = m_pDevice->CreatePipelineState(pStreamDesc, IID_PPV_ARGS(ppPipelineState));
+    CheckResult(result, "PSO creation from stream description");
+
+    return result;
+}
+
+HRESULT Dx12RenderEngine::CreateResource(ID3D12Resource** ppResource)
+{
+    // TODO: implement
+    return 0;
+}
+
+void Dx12RenderEngine::ExecuteCommandList(ID3D12GraphicsCommandList6* pCommandList)
+{
+    ID3D12CommandList* ppCommandLists[] = { pCommandList };
+    m_pCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+}
+
+
+//**********************************************************************************************************************
+//                                              Utility & Ease-Of-Use
+//**********************************************************************************************************************
+const uint Dx12RenderEngine::UploadGeometryData(Mesh* pMesh)
+{
+    const aiScene* pScene = pMesh->GetScene();
+    const uint dataSize = pScene->mMeshes[0]->mNumVertices * sizeof(aiVector3D);
+    const void* pDataBegin = pScene->mMeshes[0]->mVertices;
+
+    // write to the end of the upload buffer
+    memcpy(m_pUploadBufferEnd, pDataBegin, dataSize);
+
+    // TODO: round offset?
+
+    m_uploadBufferOffset += dataSize;
+    m_pUploadBufferEnd = m_pUploadBufferBegin + m_uploadBufferOffset;
+
+    return 0;
+}
+
+void Dx12RenderEngine::CopyResource(ComPtr<ID3D12Resource> pDst, ComPtr<ID3D12Resource> pSrc)
+{
+    const D3D12_RESOURCE_BARRIER beforeBarriers[] = {
+        CD3DX12_RESOURCE_BARRIER::Transition(pSrc.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE),
+        CD3DX12_RESOURCE_BARRIER::Transition(pDst.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST)
+    };
+    const D3D12_RESOURCE_BARRIER afterBarriers[] = {
+        CD3DX12_RESOURCE_BARRIER::Transition(pSrc.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON),
+        CD3DX12_RESOURCE_BARRIER::Transition(pDst.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+    };
+
+    m_pCommandList->ResourceBarrier(2, beforeBarriers);
+    m_pCommandList->CopyResource(pDst.Get(), pSrc.Get());
+    m_pCommandList->ResourceBarrier(2, afterBarriers);
+}
+
+
+//**********************************************************************************************************************
+//                                                  Debug & Global UI
+//**********************************************************************************************************************
+D3D12_GPU_DESCRIPTOR_HANDLE Dx12RenderEngine::AddSrvForResource(D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc, ComPtr<ID3D12Resource> pResource)
+{
+    const uint index = m_srvCount++;
+    CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(m_pSrvHeap->GetCPUDescriptorHandleForHeapStart(), index, m_srvDescriptorSize);
+    CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_pSrvHeap->GetGPUDescriptorHandleForHeapStart(), index, m_srvDescriptorSize);
+
+    m_pDevice->CreateShaderResourceView(pResource.Get(), &srvDesc, cpuHandle);
+
+    return gpuHandle;
+}
+
+
+//**********************************************************************************************************************
+//                                              Engine Internal Helpers
+//**********************************************************************************************************************
+void Dx12RenderEngine::OnUpdate()
+{
+    m_pScene->OnUpdate();
+
+    m_swapchainMutex.lock();
+    if (m_swapchainNeedsResize) ResizeSwapchain();
+    m_swapchainMutex.unlock();
+
+    // TODO: update internal state
+}
+
+void Dx12RenderEngine::PreRender()
+{
+    // TODO: perform pre-render work for new frame
+}
+
+void Dx12RenderEngine::Render()
+{
+    // Inform ImGui backends and core that we are starting a new frame, and construct the immediate-mode UI. The UI
+    //  will be drawn later via insertions into command list.
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    // reset so that scene can make requests
+    CheckResult(m_pCommandAllocator->Reset());
+    CheckResult(m_pCommandList->Reset(m_pCommandAllocator.Get(), nullptr));
+
+    // execute scene pipelines
+    m_pScene->OnRender();
+
+    // build dockspace with main menu bar, then populate with engine and scene contents
+    BuildEngineUi();
+    m_pScene->BuildUI();
+    ImGui::Render();
+
+    // after UI is described, update the floating windows and re-draw their viewports
+    ImGui::UpdatePlatformWindows();
+    ImGui::RenderPlatformWindowsDefault(NULL, (void*)m_pCommandList.Get());
+
+    // collect ImGui commands and execute them, drawing the UI
+    PopulateCommandList();
+    ID3D12CommandList* ppCommandLists[] = { m_pCommandList.Get() };
+    m_pCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+
+    // present the frame we just generated and wait for all remaining work to complete
+    CheckResult(m_pSwapChain->Present(1, 0));   // sync to next vertical blank
+                                                //CheckResult(m_pSwapChain->Present(0, 0));   // present immediately (no vsync)
+    Flush();
+
+    // progress to next frame in swapchain
+    m_frameIndex = m_pSwapChain->GetCurrentBackBufferIndex();
+}
+
+void Dx12RenderEngine::PostRender()
+{
+    // TODO: perform post-render work for new frame
+}
+
 void Dx12RenderEngine::BuildEngineUi()
 {
     const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
@@ -371,7 +633,7 @@ void Dx12RenderEngine::BuildEngineUi()
         }
         if (ImGui::IsItemDeactivated()) // since we retained the original position, don't accumulate error or slip
         {
-            //PrintMessage("Menu Bar Deactiveated\n");
+            PrintMessage("Menu Bar Deactiveated\n");
             GetWindowRect(m_window, &m_windowPosition);
         }
 
@@ -465,7 +727,7 @@ void Dx12RenderEngine::BuildEngineUi()
         ImGui::Text("Window: %.1f,%.1f, %.1fx%.1f", mainViewport->Pos.x, mainViewport->Pos.y, mainViewport->Size.x, mainViewport->Size.y);
         ImGui::Text("Client: %.1f,%.1f, %.1fx%.1f", mainViewport->WorkPos.x, mainViewport->WorkPos.y, mainViewport->WorkSize.x, mainViewport->WorkSize.y);
         ImGui::Text("Rect:   %i,%i,%i,%i %ix%i", m_windowPosition.left, m_windowPosition.top, m_windowPosition.right, m_windowPosition.bottom,
-                                                 m_windowPosition.right - m_windowPosition.left, m_windowPosition.bottom - m_windowPosition.top);
+                    m_windowPosition.right - m_windowPosition.left, m_windowPosition.bottom - m_windowPosition.top);
         ImGui::Separator();
         ImGui::End();
     }
@@ -516,202 +778,6 @@ void Dx12RenderEngine::BuildEngineUi()
     }
 }
 
-void Dx12RenderEngine::OnResize(RECT* pRect)
-{
-    // TODO: re-implement
-    auto mainViewport = ImGui::GetMainViewport();
-
-    // resize window, then place it where it is fully visible to prevent top bar from being stuck off-screen
-    RECT windowRect = { 50, 50, 1280+50, 720+50 };
-    AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
-    *pRect = windowRect;
-    m_width = 1280;
-    m_height = 720;
-    m_aspectRatio = static_cast<float>(m_width) / static_cast<float>(m_height);
-
-    ResizeSwapchain(1280, 720);
-}
-
-void Dx12RenderEngine::ToggleFullscreen()
-{
-    // TODO: re-implement
-    auto mainViewport = ImGui::GetMainViewport();
-
-    m_width = 1920;
-    m_height = 1080;
-
-    auto& IO = ImGui::GetIO();
-    //IO.DisplaySize.x = 1920;
-    //IO.DisplaySize.y = 1080;
-    m_aspectRatio = static_cast<float>(m_width) / static_cast<float>(m_height);
-
-    ResizeSwapchain(1920, 1080);
-}
-
-void Dx12RenderEngine::OnKeyDown(UINT8 key)
-{
-    // TODO: flesh out
-    switch (key)
-    {
-    case VK_F11:
-    {
-        ToggleFullscreen();
-        break;
-    }
-    default:
-    {
-    }
-    }
-}
-
-
-//**********************************************************************************************************************
-//                                              Mediated API Access
-//**********************************************************************************************************************
-HRESULT Dx12RenderEngine::CreateCommandQueue(ID3D12CommandQueue** ppCommandQueue)
-{
-    HRESULT result = S_OK;
-
-    D3D12_COMMAND_QUEUE_DESC queueDesc = {};
-    queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-    result = m_pDevice->CreateCommandQueue(&queueDesc,
-                                          __uuidof(ID3D12CommandQueue),
-                                          (void**)ppCommandQueue);
-
-    CheckResult(result, "command allocator creation");
-    return result;
-}
-
-HRESULT Dx12RenderEngine::CreateCommandAllocator(ID3D12CommandAllocator** ppCommandAllocator)
-{
-    HRESULT result = S_OK;
-    result = m_pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                              __uuidof(ID3D12CommandAllocator),
-                                              (void**)ppCommandAllocator);
-
-    CheckResult(result, "command allocator creation");
-    return result;
-}
-
-HRESULT Dx12RenderEngine::CreateCommandList(ID3D12GraphicsCommandList** ppCommandList)
-{
-    HRESULT result = S_OK;
-
-    // Old interface created in opened state. The newer one is cleaner since it creates in closed state and does not
-    //  require preexisting PSO and allocator, allowing for flexibility in setup.
-    result = m_pDevice->CreateCommandList1(0,
-                                          D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                          D3D12_COMMAND_LIST_FLAG_NONE,
-                                          __uuidof(ID3D12GraphicsCommandList),
-                                          (void**)(ppCommandList));
-
-    CheckResult(result, "command list creation");
-    return result;
-}
-
-HRESULT Dx12RenderEngine::CreateRootSignature(CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC* pDesc, ID3D12RootSignature** ppRootSignature)
-{
-    ComPtr<ID3DBlob> pSignature;
-    ComPtr<ID3DBlob> pError;
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-    HRESULT result = S_OK;
-
-    featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-    {
-        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
-
-    result = D3DX12SerializeVersionedRootSignature(pDesc, featureData.HighestVersion, &pSignature, &pError);
-    if (SUCCEEDED(result))
-    {
-        result = m_pDevice->CreateRootSignature(0, pSignature->GetBufferPointer(), pSignature->GetBufferSize(), IID_PPV_ARGS(ppRootSignature));
-        if (FAILED(result))
-        {
-            PrintMessage(Error, "Root signature creation failed!\n");
-        }
-    }
-    else
-    {
-        PrintMessage(Error, "Root signature serialization failed:\n{}", (char*)pError->GetBufferPointer());
-    }
-
-    return result;
-}
-
-HRESULT Dx12RenderEngine::CreatePipelineState(D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc,
-                                              ID3D12PipelineState**               ppPipelineState)
-{
-    HRESULT result = m_pDevice->CreateGraphicsPipelineState(pDesc, IID_PPV_ARGS(ppPipelineState));
-    CheckResult(result, "PSO creation");
-
-    return result;
-}
-
-HRESULT Dx12RenderEngine::CreateResource(ID3D12Resource** ppResource)
-{
-
-    return 0;
-}
-
-void Dx12RenderEngine::ExecuteCommandList(ID3D12GraphicsCommandList* pCommandList)
-{
-    ID3D12CommandList* ppCommandLists[] = { pCommandList };
-    m_pCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
-}
-
-
-//**********************************************************************************************************************
-//                                              Utility & Ease-Of-Use
-//**********************************************************************************************************************
-const uint Dx12RenderEngine::UploadGeometryData(Mesh* pMesh)
-{
-    const aiScene* pScene = pMesh->GetScene();
-    const uint dataSize = pScene->mMeshes[0]->mNumVertices * sizeof(aiVector3D);
-    const void* pDataBegin = pScene->mMeshes[0]->mVertices;
-
-    // write to the end of the upload buffer
-    memcpy(m_pUploadBufferEnd, pDataBegin, dataSize);
-
-    // TODO: round offset?
-
-    m_uploadBufferOffset += dataSize;
-    m_pUploadBufferEnd = m_pUploadBufferBegin + m_uploadBufferOffset;
-
-    return 0;
-}
-
-void Dx12RenderEngine::CopyResource(ComPtr<ID3D12Resource> pDst, ComPtr<ID3D12Resource> pSrc)
-{
-    m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSrc.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE));
-    m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pDst.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
-
-    m_pCommandList->CopyResource(pDst.Get(), pSrc.Get());
-
-    m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSrc.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON));
-    m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pDst.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
-}
-
-
-//**********************************************************************************************************************
-//                                                  Debug & Global UI
-//**********************************************************************************************************************
-D3D12_GPU_DESCRIPTOR_HANDLE Dx12RenderEngine::AddSrvForResource(D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc, ComPtr<ID3D12Resource> pResource)
-{
-    const uint index = m_srvCount++;
-    CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(m_pSrvHeap->GetCPUDescriptorHandleForHeapStart(), index, m_srvDescriptorSize);
-    CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_pSrvHeap->GetGPUDescriptorHandleForHeapStart(), index, m_srvDescriptorSize);
-
-    m_pDevice->CreateShaderResourceView(pResource.Get(), &srvDesc, cpuHandle);
-
-    return gpuHandle;
-}
-
-
-//**********************************************************************************************************************
-//                                              Engine Internal Helpers
-//**********************************************************************************************************************
 void Dx12RenderEngine::PopulateCommandList()
 {
     // ImGui uses the heaps we provide, so we need to set them
@@ -719,7 +785,10 @@ void Dx12RenderEngine::PopulateCommandList()
     m_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
     // use back buffer of swapchain as render target
-    m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pRenderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
+    const auto beforeBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pRenderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_pCommandList->ResourceBarrier(1, &beforeBarrier);
+
+    //m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pRenderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
     m_pCommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
     m_pCommandList->ClearRenderTargetView(rtvHandle, m_clearColor, 0, nullptr);
@@ -730,43 +799,49 @@ void Dx12RenderEngine::PopulateCommandList()
     // TODO: transition viewport resources back
 
     // transition back buffer to present mode prior to present
-    m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pRenderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
+    const auto afterBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pRenderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    m_pCommandList->ResourceBarrier(1, &afterBarrier);
+    //m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pRenderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
 
     CheckResult(m_pCommandList->Close());
 }
 
-void Dx12RenderEngine::ResizeSwapchain(uint width, uint height)
+void Dx12RenderEngine::ResizeSwapchain()
 {
-    // TODO: re-implement
-    // update swapchain and RTV state
-    {
-        // wait for render targets to not be in use, then remove references to back buffers
-        Flush();
-        m_pRenderTargets[0].Reset();
-        m_pRenderTargets[1].Reset();
+    m_width = m_newWindowPosition.cx;
+    m_height = m_newWindowPosition.cy;
 
-        // resize the swapchain buffers
-        DXGI_MODE_DESC newMode = {0};
-        newMode.Width = width;
-        newMode.Height = height;
-        newMode.RefreshRate.Numerator = 60;
-        newMode.RefreshRate.Denominator = 1;
-        m_pSwapChain->ResizeTarget(&newMode);
-        m_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0); // resize to client area
+    // wait for render targets to not be in use, then remove references to back buffers
+    Flush();
+    m_pRenderTargets[0].Reset();
+    m_pRenderTargets[1].Reset();
 
-        // re-bind swapchain back buffers to render target resources, then update RTVs
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart());
-        CheckResult(m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&m_pRenderTargets[0])));
-        m_pDevice->CreateRenderTargetView(m_pRenderTargets[0].Get(), nullptr, rtvHandle);
-        rtvHandle.Offset(1, m_rtvDescriptorSize);
-        CheckResult(m_pSwapChain->GetBuffer(1, IID_PPV_ARGS(&m_pRenderTargets[1])));
-        m_pDevice->CreateRenderTargetView(m_pRenderTargets[1].Get(), nullptr, rtvHandle);
+    // resize the swapchain buffers
+    DXGI_MODE_DESC newMode = { 0 };
+    newMode.Width = m_width;
+    newMode.Height = m_height;
+    newMode.RefreshRate.Numerator = 60;
+    newMode.RefreshRate.Denominator = 1;
+    newMode.Scaling = DXGI_MODE_SCALING_CENTERED;
+    m_pSwapChain->ResizeTarget(&newMode);
+    if (m_fullscreen) m_pSwapChain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
+    else              m_pSwapChain->ResizeBuffers(0, m_width, m_height, DXGI_FORMAT_UNKNOWN, 0);
 
-        // re-configure render state
-        m_pRenderTargets[0]->SetName(L"Updated RTV 0");
-        m_pRenderTargets[1]->SetName(L"Updated RTV 1");
-        m_frameIndex = m_pSwapChain->GetCurrentBackBufferIndex();
-    }
+    // re-bind swapchain back buffers to render target resources, then update RTVs
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart());
+    CheckResult(m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&m_pRenderTargets[0])));
+    m_pDevice->CreateRenderTargetView(m_pRenderTargets[0].Get(), nullptr, rtvHandle);
+    rtvHandle.Offset(1, m_rtvDescriptorSize);
+    CheckResult(m_pSwapChain->GetBuffer(1, IID_PPV_ARGS(&m_pRenderTargets[1])));
+    m_pDevice->CreateRenderTargetView(m_pRenderTargets[1].Get(), nullptr, rtvHandle);
+
+    // re-configure render state
+    m_pRenderTargets[0]->SetName(L"Updated RTV 0");
+    m_pRenderTargets[1]->SetName(L"Updated RTV 1");
+    m_frameIndex = m_pSwapChain->GetCurrentBackBufferIndex();
+    m_swapchainNeedsResize = false;
+
+    GetWindowRect(m_window, &m_windowPosition);
 }
 
 void Dx12RenderEngine::SetDebugData()

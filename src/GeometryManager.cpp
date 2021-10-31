@@ -25,10 +25,12 @@ void GeometryManager::Init()
 
     // constant buffer for per-mesh per-frame data
     {
+        const auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+        const auto bufferProps = CD3DX12_RESOURCE_DESC::Buffer(256 * 64);
         CheckResult(pDevice->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            &heapProps,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(256 * 64),
+            &bufferProps,
             D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
             IID_PPV_ARGS(&m_pConstantBuffer)));
@@ -40,10 +42,12 @@ void GeometryManager::Init()
     // upload heap (committed resource) for generic usage
     {
         constexpr uint uploadBufferSize = 32*1024*1024;
+        const auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+        const auto bufferProps = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
         CheckResult(pDevice->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            &heapProps,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize),
+            &bufferProps,
             D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
             IID_PPV_ARGS(&m_pUploadBuffer)));
@@ -56,10 +60,12 @@ void GeometryManager::Init()
     // default heap (committed resource) for geometry data
     {
         constexpr uint geometryBufferSize = 8*1024*1024;
+        const auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+        const auto bufferProps = CD3DX12_RESOURCE_DESC::Buffer(geometryBufferSize);
         CheckResult(pDevice->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            &heapProps,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(geometryBufferSize),
+            &bufferProps,
             D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
             IID_PPV_ARGS(&m_pGeometryBuffer)));
@@ -109,8 +115,9 @@ void GeometryManager::BuildUI()
 
 uint GeometryManager::AddMesh(string filename, bool addDrawable)
 {
-    Mesh& newMesh = m_Meshes.emplace_back(filename);
-    RegisterAndUploadMesh(newMesh);
+    Mesh* pMesh = new Mesh(filename);
+    m_Meshes.push_back(pMesh);
+    RegisterAndUploadMesh(pMesh);
 
     // we should only upload each mesh once unless there is an explicit AddMesh call for the same file
     uint meshCount = m_Meshes.size();
@@ -140,9 +147,9 @@ uint GeometryManager::AddDrawable(Drawable drawable)
     return drawable.drawableID;
 }
 
-MeshBufferLayout GeometryManager::RegisterAndUploadMesh(Mesh& newMesh)
+MeshBufferLayout GeometryManager::RegisterAndUploadMesh(Mesh* pMesh)
 {
-    MeshBufferLayout layout = newMesh.PopulateGeometryBuffer((void*)m_pUploadBufferEnd);
+    MeshBufferLayout layout = pMesh->PopulateGeometryBuffer((void*)m_pUploadBufferEnd);
 
     MeshBufferViews newMeshViews = {};
     auto baseOffset = m_pUploadBuffer->GetGPUVirtualAddress() + m_uploadBufferOffset;

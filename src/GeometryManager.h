@@ -72,8 +72,7 @@ public:
     // TODO: replace vectors with maps or lists to allow removal
     std::vector<Drawable>* GetDrawables()                   {return &m_drawables;}
     Drawable GetDrawable(uint index)                        {return m_drawables[index];}
-    std::vector<Mesh>* GetMeshes()                          {return &m_Meshes;}
-    Mesh* GetMesh(uint index)                               {return &m_Meshes[index];}
+    Mesh* GetMesh(uint index)                               {return m_Meshes[index];}
     std::vector<MeshBufferViews>* GetMeshBufferViews()      {return &m_meshBufferViews;}
     MeshBufferViews GetMeshBufferView(uint index)           {return m_meshBufferViews[index];}
     ID3D12Resource* GetConstantBufferResource()             {return m_pConstantBuffer.Get();}
@@ -81,7 +80,7 @@ public:
 
 protected:
     uint AddDrawable(Drawable drawable);
-    MeshBufferLayout RegisterAndUploadMesh(Mesh& newMesh);
+    MeshBufferLayout RegisterAndUploadMesh(Mesh* pMesh);
 
 
     // identifiers
@@ -90,7 +89,7 @@ protected:
 
     // lists of various geometry types
     std::vector<Drawable>               m_drawables;            // per-instance geometry data
-    std::vector<Mesh>                   m_Meshes;               // CPU-side mesh representations
+    std::vector<Mesh*>                  m_Meshes;               // CPU-side mesh representations
 
     // constant buffer for per-mesh data
     ComPtr<ID3D12Resource>              m_pConstantBuffer;

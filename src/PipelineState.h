@@ -56,7 +56,7 @@ public:
     const bool isInitialized() const {m_initialized;}
     const bool isCompiled() const {m_compiled;}
 
-private:
+protected:
     // instance metadata
     bool                                m_initialized;
     bool                                m_compiled;
@@ -69,7 +69,7 @@ private:
 
     // API constructs
     ComPtr<ID3D12CommandAllocator>      m_pCommandAllocator;
-    ComPtr<ID3D12GraphicsCommandList>   m_pCommandList;
+    ComPtr<ID3D12GraphicsCommandList6>  m_pCommandList;
 
     // pipeline state
     ComPtr<ID3D12RootSignature>         m_pRootSignature;

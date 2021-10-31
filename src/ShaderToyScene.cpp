@@ -1,6 +1,7 @@
 #include "ShaderToyScene.h"
 
 #include "Widgets.h"
+#include <imgui_internal.h>
 
 ShaderToyScene::ShaderToyScene(std::wstring name) :
     m_name(name),

@@ -3,7 +3,6 @@
 #include "Shade.h"
 
 #include <dxcapi.h>
-#include "Dx12RenderEngine.h"
 #include "Util.h"
 
 
