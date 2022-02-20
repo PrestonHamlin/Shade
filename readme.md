@@ -14,7 +14,7 @@ Essentially the starting goal is a material editor ripped out of Blender/UE4.
 
 Dependencies
 -----
-Shade currently depends on [FMT](https://github.com/fmtlib/fmt), [ImGui](https://github.com/ocornut/imgui) and [assimp](https://github.com/assimp/assimp).
+Shade currently depends on [FMT](https://github.com/fmtlib/fmt), [ImGui](https://github.com/ocornut/imgui), [ImNodes](https://github.com/Nelarius/imnodes) and [assimp](https://github.com/assimp/assimp).
 
 
 Initial Features
@@ -46,16 +46,11 @@ Initial goals are a shader editor and mesh viewer with UI elements like Blender 
     - Autosave with file hash
     - Option to rename and keep open
 
-#### Current Status
-Shade is currently a fixed-sized window fully rendered via ImGui with several functional menus/widgets and dockable contents. A primary pipeline renders meshes loaded via Assimp and exports its render target.
-
 Next steps:
-- Window resizing functionality
-- Cleanup data flow and object creation
+- Fixed viewports
+- Entities
 - Parameterize and better expose pipelines
 - Chain pipelines
-- Depth viewport post-processing
-- Node graphs for connecting scene components
 - UI prettification
 
 ![Current rendered content](./render.png)

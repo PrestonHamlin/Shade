@@ -6,6 +6,7 @@
 #include "Mesh.h"
 #include "ShaderToyScene.h"
 #include "Widgets.h"
+#include <imnodes.h>
 
 
 using namespace std;
@@ -232,6 +233,7 @@ void Dx12RenderEngine::Init(const HWND window)
     // configure and initialize ImGui
     {
         m_pImGuiContext = ImGui::CreateContext();
+        m_pImNodesContext = ImNodes::CreateContext();
         ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
         ImGui_ImplDX12_Init(m_pDevice.Get(), 2, DXGI_FORMAT_R8G8B8A8_UNORM, m_pSrvHeap.Get(),
@@ -300,7 +302,9 @@ void Dx12RenderEngine::OnDestroy()
 
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
+    ImNodes::DestroyContext(m_pImNodesContext);
     ImGui::DestroyContext(m_pImGuiContext);
+    m_pImNodesContext = nullptr;
     m_pImGuiContext = nullptr;
 }
 

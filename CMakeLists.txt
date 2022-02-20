@@ -88,6 +88,14 @@ set(SHADE_HEADERS
     src/Viewport.h
     src/Widgets.h
 )
+set(SHADE_NODES
+    src/nodes/NodeEditor.h
+    src/nodes/NodeEditor.cpp
+    src/nodes/Node.h
+    src/nodes/Node.cpp
+    src/nodes/NodeNumeric.cpp
+    src/nodes/NodeLink.h
+)
 
 # TODO: move shaders to their own subdirectory
 set(SHADE_SHADERS src/shaders.hlsl)
@@ -95,14 +103,16 @@ source_group("Shaders" FILES ${SHADE_SHADERS})
 set_source_files_properties(${SHADE_SHADERS} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 # group Shade dependencies
-set(ALL_SOURCES ${SHADE_SOURCES} ${IMGUI_SOURCES} ${IMNODES_SOURCES})
-set(ALL_HEADERS ${SHADE_HEADERS} ${IMGUI_HEADERS} ${IMNODES_HEADERS} ${EXTRA_HEADERS})
+set(SHADE_SOURCES_ALL
+    ${SHADE_SOURCES} ${SHADE_HEADERS} ${SHADE_NODES}
+    ${IMGUI_SOURCES} ${IMGUI_HEADERS}
+    ${IMNODES_SOURCES} ${IMNODES_HEADERS}
+    ${EXTRA_HEADERS}
+)
 
 # add primary executable and set it's language version
-message("ALL_SOURCES: ${ALL_SOURCES}")
-message("ALL_HEADERS: ${ALL_HEADERS}")
 message("SHADE_SHADERS: ${SHADE_SHADERS}")
-add_executable(Shade WIN32 ${ALL_SOURCES} ${ALL_HEADERS} ${SHADE_SHADERS})
+add_executable(Shade WIN32 ${SHADE_SOURCES_ALL} ${SHADE_SHADERS})
 set_property(TARGET Shade PROPERTY CXX_STANDARD 17)
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Shade)
 

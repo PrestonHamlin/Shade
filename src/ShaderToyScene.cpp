@@ -108,6 +108,12 @@ void ShaderToyScene::BuildUI()
         ImGui::End(); // file browser
     }
 
+    // node editor
+    {
+        m_nodeEditor.Update();
+        m_nodeEditor.Draw();
+    }
+
     // geometry management
     m_geometryManager.BuildUI();
 

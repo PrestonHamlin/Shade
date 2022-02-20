@@ -5,6 +5,7 @@
 #include "PipelineState.h"
 #include "Camera.h"
 #include "GeometryManager.h"
+#include "nodes/NodeEditor.h"
 
 
 class ShaderToyScene : public Scene
@@ -33,6 +34,7 @@ private:
     Camera                              m_camera;
     ViewportRenderTarget                m_viewportForRtv;
     ViewportDepthTexture                m_viewportForDepth;
+    NodeEditor                          m_nodeEditor;
 
     // scene data
     std::wstring                        m_name;

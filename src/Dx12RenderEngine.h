@@ -5,6 +5,7 @@
 #include <imgui.h>
 #include <imgui_impl_dx12.h>
 #include <imgui_impl_win32.h>
+#include <imnodes.h>
 
 #include "Mesh.h"
 
@@ -115,6 +116,7 @@ private:
 
     // UI
     ImGuiContext*                       m_pImGuiContext;
+    ImNodesContext*                     m_pImNodesContext;
     RECT                                m_windowPosition;
     RECT                                m_dwmFrameBounds;
     WINDOWPOS                           m_newWindowPosition;
