@@ -23,7 +23,7 @@ set(IMGUI_HEADERS
 source_group("ImGui" FILES ${IMGUI_SOURCES} ${IMGUI_HEADERS})
 
 include_directories(${IMGUI_SOURCE_DIRS})
-
+add_compile_definitions(IMGUI_DISABLE_OBSOLETE_FUNCTIONS=1)
 
 # ImNodes is an ImGui-based node editor
 set(IMNODES_SOURCE_PATH ${PROJECT_SOURCE_DIR}/extern/ImNodes)
